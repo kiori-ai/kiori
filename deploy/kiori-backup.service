@@ -1,0 +1,48 @@
+# Kiori's nightly backup: backup.sh, installed by setup.sh as /usr/local/sbin/kiori-backup. kiori-backup.timer runs it.
+#   By hand: systemctl start kiori-backup        Logs: journalctl -u kiori-backup        Files: /var/backups/kiori
+
+[Unit]
+Description=Kiori backup (database, secret.key, admin.key)
+After=kiori.service
+
+[Service]
+Type=oneshot
+# A backup that hangs (a stuck copy, an offsite upload that never ends) is stopped, so the next night's can run
+TimeoutStartSec=30min
+# As kiori, never root: sqlite3 run as root could leave root-owned -wal/-shm files that lock Kiori out of its database
+User=kiori
+Group=kiori
+UMask=0077
+# Optional: settings for the offsite copy and the backup ping (see backup.sh). Fine if the file doesn't exist.
+EnvironmentFile=-/etc/kiori/backup.env
+ExecStart=/usr/local/sbin/kiori-backup
+Nice=10
+IOSchedulingClass=idle
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kiori-backup
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+# sqlite3 writes the live database's -shm file even to read it; the backups go to /var/backups/kiori
+ReadWritePaths=/var/lib/kiori /var/backups/kiori
+PrivateTmp=yes
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

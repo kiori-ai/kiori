@@ -1,0 +1,74 @@
+# Kiori's API on the server: `node bin/kiori.mjs serve` as the kiori user, data in /var/lib/kiori, logs in journald.
+# Installed by setup.sh as /etc/systemd/system/kiori.service. Kiori listens on 127.0.0.1:7700 only; the internet
+# reaches it through the Cloudflare tunnel (cloudflared.service).
+#
+#   systemctl status kiori        journalctl -u kiori -f        systemctl restart kiori
+
+[Unit]
+Description=Kiori API (brains for characters)
+Documentation=file:/opt/kiori/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+# Never starts on an empty data folder: Kiori would quietly make a new database, admin.key and secret.key there, and
+# the real ones copied in later could get mixed up with them. kiori-restore puts the data in place first.
+# (A brand-new install with nothing to bring over: `sudo kiori projects` once makes the empty database.)
+AssertPathExists=|/var/lib/kiori/kiori.db
+AssertPathExists=|/var/lib/kiori/psyche.db
+# Restarted however often it stops: a caller who found a way to crash Kiori mustn't be able to keep it down (systemd's
+# default gives up after a few starts). A bad update is rolled back by update.sh; the wait between starts grows to a
+# minute while it keeps crashing (journalctl -u kiori says why)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=kiori
+Group=kiori
+WorkingDirectory=/opt/kiori
+# Settings (the model key, the public URL...): /etc/kiori/kiori.env, filled in by hand from kiori.env.example.
+EnvironmentFile=/etc/kiori/kiori.env
+# The data folder, address and port are set on the command line so that no line in kiori.env (say, one copied from
+# another machine's .env) can move them: the data folder is the only place this service may write, and the tunnel expects
+# 127.0.0.1:7700.
+ExecStart=/usr/bin/env KIORI_DATA=/var/lib/kiori KIORI_HOST=127.0.0.1 PORT=7700 /usr/local/bin/node /opt/kiori/bin/kiori.mjs serve
+Restart=always
+RestartSec=2
+RestartSteps=5
+RestartMaxDelaySec=60
+# Kiori has no shutdown handler: SIGTERM ends it at once, which SQLite in WAL mode handles safely.
+TimeoutStopSec=10
+UMask=0077
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=kiori
+# Room for big brain payloads, but a runaway process can't take the whole server down with it
+MemoryMax=75%
+
+# Hardening. Kiori only reads its code, writes its data folder and makes outbound HTTPS calls.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kiori
+PrivateTmp=yes
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Not MemoryDenyWriteExecute=yes: Node's JIT compiler needs memory that is both writable and executable.
+
+[Install]
+WantedBy=multi-user.target

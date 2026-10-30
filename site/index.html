@@ -1,0 +1,1172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiori — brains for characters</title>
+<meta name="description" content="Kiori builds the inner world of your characters: what they remember, what they never saw, who they love, what they hide. You keep your chat, your model and their brains.">
+<link rel="icon" type="image/png" sizes="32x32" href="/site/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/site/img/favicon-16.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/site/img/favicon-192.png">
+<link rel="apple-touch-icon" href="/site/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<script>document.documentElement.classList.add('js')</script>
+<style>
+/* A scrapbook: cobalt sticker pages, cream paper, kraft board and graph paper, torn where they meet; white polaroids,
+   die-cut sticker cards, index cards, washi tape and handwriting */
+:root {
+  --cobalt: #1d55c4; --night: #0d2a6e;
+  --paper: #f6f1e6; --kraft: #eadcc2; --gridp: #edf2fb; --card: #ffffff; --note: #fdf0bf; --line: #e4dccb;
+  --ink: #13204a; --ink-2: #4b5781; --ink-3: #8b93ae;
+  --tape: rgba(238, 208, 128, .72);
+  --gold: #f2c75c; --poppy: #e6452f; --pink: #ff8fb0; --lilac: #c9b3ff;
+  --mei: #e0452f; --kai: #d0900c; --rosa: #ef4f86;
+  --serif: 'Instrument Serif', 'Times New Roman', serif;
+  --sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --mono: 'DM Mono', ui-monospace, Menlo, monospace;
+  --hand: 'Caveat', 'Bradley Hand', 'Segoe Print', cursive;
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --gut: 24px;
+  --star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2.5l2.47 6.6 7.04.31-5.52 4.39 1.89 6.79-5.88-3.89-5.88 3.89 1.89-6.79-5.52-4.39 7.04-.31z' stroke='%23000' stroke-width='1.8' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --tear: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 480 24'%3E%3Cpath d='M0 24V12L12 5L25 13L32 4L47 4L59 12L66 17L81 6L88 4L101 9L109 6L117 11L130 3L146 4L156 13L173 12L180 12L196 9L203 6L210 11L219 7L232 5L247 4L263 7L278 16L295 5L303 12L319 13L329 8L337 11L355 4L371 3L387 6L401 13L416 9L435 8L449 12L463 8L480 12V24z'/%3E%3C/svg%3E");
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+html, body { overflow-x: clip; }
+body { background: var(--paper); color: var(--ink); font: 400 15px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+/* pictures are shown, not handed out: none can be dragged off, or saved from the menu or with a long press (the
+   pointer passes through to the card under it, so the cards still lift and tilt) */
+img { display: block; max-width: 100%; height: auto; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: none; }
+a { color: inherit; text-decoration: none; }
+a:focus-visible, button:focus-visible, canvas:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 8px; }
+/* the print grain that sits over everything */
+body::after { content: ""; position: fixed; inset: 0; z-index: 90; pointer-events: none; opacity: .08;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .12 0 0 0 0 .25 0 0 0 1.6 -.55'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+section[id], footer[id], header[id] { scroll-margin-top: 64px; }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(var(--gut), env(safe-area-inset-left, 0px)); padding-right: max(var(--gut), env(safe-area-inset-right, 0px)); }
+.kicker { display: inline-block; font: 500 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--cobalt); }
+h1, h2, h3 { font-family: var(--serif); font-weight: 400; letter-spacing: -.01em; text-wrap: balance; }
+h1 { font-size: clamp(36px, 4.4vw, 58px); line-height: 1.02; }
+h2 { font-size: clamp(30px, 3.3vw, 42px); line-height: 1.06; margin-top: 12px; }
+h3 { font-size: 20px; line-height: 1.2; }
+h1 em, h2 em { font-style: italic; }
+p { color: var(--ink-2); }
+.lede { font-size: 15.5px; max-width: 560px; margin-top: 14px; }
+.center { text-align: center; }
+.center .lede { margin-left: auto; margin-right: auto; }
+
+/* the papers */
+.paper { background: var(--paper); }
+.cobalt { color: #fff; background-color: var(--cobalt); background-image: radial-gradient(rgba(255, 255, 255, .075) 1px, transparent 1.5px); background-size: 7px 7px; }
+.cobalt p { color: rgba(255, 255, 255, .84); }
+.cobalt .kicker { color: var(--gold); }
+.kraft { background-color: var(--kraft); background-image: radial-gradient(rgba(120, 88, 40, .08) 1px, transparent 1.5px); background-size: 9px 9px; }
+.gridp { background-color: var(--gridp); background-image: linear-gradient(rgba(29, 85, 196, .07) 1px, transparent 1px), linear-gradient(90deg, rgba(29, 85, 196, .07) 1px, transparent 1px); background-size: 24px 24px; }
+/* where two papers meet, the lower one is torn along its top edge, with a white fibre showing */
+.torn { position: relative; }
+.tear { position: absolute; z-index: 5; left: 0; right: 0; top: -21px; height: 24px; pointer-events: none; filter: drop-shadow(0 -2px 2px rgba(9, 30, 90, .16)); }
+.tear::before, .tear::after { content: ""; position: absolute; left: 0; right: 0; height: 24px; -webkit-mask: var(--tear) 0 0 / 480px 24px repeat-x; mask: var(--tear) 0 0 / 480px 24px repeat-x; }
+.tear::before { top: -3px; background: #fff; }
+.tear::after { top: 0; background: var(--tc); }
+.paper > .tear { --tc: var(--paper); }
+.kraft > .tear { --tc: var(--kraft); }
+.gridp > .tear { --tc: var(--gridp); }
+.cobalt > .tear { --tc: var(--cobalt); }
+
+/* polaroids, sticker cards, notes */
+/* cards lift when the pointer is on them: raised in the stack at once, lowered only after they've settled back (so
+   nothing flips in front of them halfway); what's pinned to a card lifts with it and stays on top of it */
+.pol { position: relative; background: var(--card); padding: 10px 10px 0; rotate: var(--r, 0deg); box-shadow: 0 18px 36px -18px rgba(14, 28, 63, .55); transition: rotate .45s var(--ease), translate .45s var(--ease), scale .45s var(--ease), box-shadow .45s, z-index 0s .45s; }
+.pol img { width: 100%; aspect-ratio: var(--ar, 1); object-fit: cover; object-position: var(--op, 50% 50%); }
+.pol figcaption { padding: 10px 4px 14px; font: 600 21px/1.05 var(--hand); color: var(--ink); text-align: center; }
+.pol::before { content: ""; position: absolute; z-index: 1; top: -11px; left: 50%; width: 76px; height: 22px; margin-left: -38px; background: var(--tape); rotate: -4deg; }
+.pol:hover, .item:hover .pol, .use:hover .pol { rotate: 0deg; translate: 0 -6px; scale: 1.03; z-index: 4; box-shadow: 0 28px 50px -22px rgba(14, 28, 63, .6); transition-delay: 0s; }
+.scard { position: relative; rotate: var(--r, 0deg); transition: rotate .45s var(--ease), scale .45s var(--ease), z-index 0s .45s; }
+.scard img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 13%; border: 5px solid #fff; box-shadow: 0 22px 40px -18px rgba(4, 16, 60, .6); }
+.scard:hover { rotate: 0deg; scale: 1.04; z-index: 4; transition-delay: 0s; }
+.scard figcaption { margin-top: 12px; font: 700 25px/1.05 var(--hand); color: #fff; text-align: center; rotate: -3deg; }
+.cut { filter: drop-shadow(0 14px 18px rgba(6, 22, 72, .38)); }
+.sticky { display: inline-block; padding: 16px 22px; background: var(--note); rotate: -1.5deg; box-shadow: 0 18px 34px -22px rgba(14, 28, 63, .5); font: 600 24px/1.2 var(--hand); color: var(--ink); }
+.sticky b { color: var(--cobalt); font-weight: 700; }
+/* a slogan ends on a five-pointed star, and some other stars (in the sky, in lists) are five-pointed too; the tape keeps
+   its four-pointed sparkles */
+.star5 { display: inline-block; width: .8em; height: .8em; background: currentColor; -webkit-mask: var(--star) center / contain no-repeat; mask: var(--star) center / contain no-repeat; vertical-align: -.06em; }
+
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 999px; font: 500 13.5px/1 var(--sans); white-space: nowrap; transition: transform .25s var(--ease), box-shadow .25s, background .25s, color .25s; }
+.btn.solid { background: #fff; color: var(--ink); box-shadow: 0 8px 22px -10px rgba(4, 16, 60, .6); }
+.btn.solid:hover { transform: translateY(-2px) rotate(-1deg); box-shadow: 0 12px 26px -8px rgba(242, 199, 92, .8); }
+.btn.ghost { color: #fff; border: 1.5px solid rgba(255, 255, 255, .6); }
+.btn.ghost:hover { background: rgba(255, 255, 255, .14); }
+.btn.ink { background: var(--ink); color: #fff; }
+.btn.ink:hover { transform: translateY(-2px); background: var(--cobalt); }
+.btn.line { border: 1.5px solid var(--line); color: var(--ink); background: #fff; }
+.btn.line:hover { border-color: var(--cobalt); color: var(--cobalt); }
+.cta { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* nav: a small floating sticker */
+.nav { position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; z-index: 60; transform: translateX(-50%); display: flex; align-items: center; gap: 22px; width: max-content; max-width: calc(100% - 24px); padding: 7px 7px 7px 20px; border-radius: 999px; background: rgba(255, 255, 255, .86); border: 1px solid rgba(255, 255, 255, .9); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 10px 30px -14px rgba(8, 22, 61, .5); font-size: 13px; transition: background .3s; }
+.nav.solid { background: rgba(255, 255, 255, .96); }
+.nav .links { display: flex; gap: 20px; }
+.nav .links a { color: var(--ink-2); transition: color .2s; }
+.nav .links a:hover { color: var(--ink); }
+.nav .btn { height: 32px; padding: 0 15px; font-size: 12.5px; }
+.logo { position: relative; display: inline-block; padding-top: 3px; font: italic 400 23px/1 var(--serif); letter-spacing: -.01em; }
+.logo .halo { position: absolute; left: 0; top: -4px; width: 15px; height: 6px; border: 1.6px solid var(--gold); border-radius: 50%; transform: rotate(-14deg); animation: halo 4s ease-in-out infinite; }
+@keyframes halo { 50% { transform: rotate(-6deg) translateY(-2px); } }
+
+/* hero: the sticker card, two polaroids tucked at its corners */
+.hero { overflow: hidden; padding-block: 104px 84px; }
+.hero-in { max-width: 1180px; margin: 0 auto; padding-left: max(var(--gut), env(safe-area-inset-left, 0px)); padding-right: max(var(--gut), env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 30px; align-items: center; }
+.hero-copy { max-width: 500px; }
+.tag { display: inline-flex; padding: 7px 13px; border-radius: 999px; background: #fff; color: var(--cobalt); font: 500 11px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; rotate: -2deg; box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .5); }
+.hero h1 { margin-top: 24px; color: #fff; }
+.hero-copy p { font-size: 15.5px; max-width: 470px; margin: 18px 0 26px; }
+.scribble { display: inline-block; margin-top: 26px; font: 700 26px/1.1 var(--hand); color: var(--gold) !important; rotate: -3deg; }
+.art-wrap { --s: 1; width: calc(600px * var(--s)); height: calc(560px * var(--s)); }
+.art { position: relative; width: 600px; height: 560px; transform: scale(var(--s)); transform-origin: top left; }
+.art .big { position: absolute; left: 118px; top: 46px; width: 372px; }
+.art .big figcaption { text-align: left; margin-left: 10px; }
+.art .p1 { position: absolute; z-index: 5; left: 14px; top: 8px; width: 156px; }
+.art .p2 { position: absolute; z-index: 5; left: 420px; top: 392px; width: 180px; }
+.art .pol:hover { z-index: 7; }
+.art .p1 figcaption, .art .p2 figcaption { font-size: 18px; padding-block: 9px 12px; }
+.hello { position: absolute; z-index: 6; left: 436px; top: 22px; font: 700 27px/1 var(--hand); color: #fff; rotate: 7deg; pointer-events: none; }
+.hello svg { position: absolute; left: -66px; top: 22px; width: 62px; height: 46px; overflow: visible; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.spark { position: absolute; z-index: 6; color: var(--gold); font: 400 20px/1 var(--sans); animation: twinkle 3.2s ease-in-out infinite; pointer-events: none; }
+.spark.s1 { left: 60px; top: 300px; } .spark.s2 { left: 540px; top: 210px; font-size: 14px; animation-delay: -1.2s; } .spark.s3 { left: 96px; top: 480px; font-size: 13px; animation-delay: -2.1s; }
+/* a few stars in the sky above her, inside the card */
+.spark.s4 { left: 182px; top: 96px; font-size: 17px; animation-delay: -.6s; } .spark.s5 { left: 318px; top: 74px; font-size: 12px; animation-delay: -1.8s; } .spark.s6 { left: 420px; top: 132px; font-size: 19px; animation-delay: -2.6s; } .spark.s7 { left: 262px; top: 128px; font-size: 10px; animation-delay: -.2s; }
+@keyframes twinkle { 50% { opacity: .35; scale: .7; } }
+
+/* washi tape running across the seam: opaque, and tilted by a fixed rise rather than a fixed angle, so it covers the
+   torn edge under it at any width (the cobalt and the edge used to show through on wide screens) */
+.tape-strip { position: relative; z-index: 6; height: 0; }
+.tape-strip .band { position: absolute; left: -2%; right: -2%; top: -32px; rotate: -1.3deg; rotate: calc(-1 * atan2(min(18px, 2.36vw), 104vw)); overflow: hidden; background: #f0d99d; box-shadow: 0 8px 18px -12px rgba(0, 0, 0, .35); }
+.tape-strip .track { display: flex; width: max-content; animation: marquee 52s linear infinite; }
+.tape-strip span { padding: 9px 20px 10px; font: 700 22px/1 var(--hand); color: var(--ink); white-space: nowrap; }
+.tape-strip span::before { content: "✦"; margin-right: 20px; color: var(--poppy); font: 400 14px/1 var(--sans); vertical-align: 4px; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+/* what it is: three sticker cards and what travels between them */
+.what { padding-block: 116px 100px; }
+.flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; max-width: 1040px; margin: 56px auto 0; }
+.step { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.step .scard { width: 172px; margin-bottom: 14px; }
+.step figcaption { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.step b { font: 700 29px/1 var(--hand); color: var(--ink); }
+.step small { max-width: 210px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.step code { margin-top: 6px; padding: 5px 9px; border-radius: 999px; background: rgba(29, 85, 196, .08); font: 400 10.5px/1 var(--mono); color: var(--cobalt); }
+.link { width: 176px; margin-top: 44px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.link q { font: 600 18px/1.15 var(--hand); color: var(--ink); rotate: -2deg; }
+.link svg { width: 150px; height: 44px; overflow: visible; }
+.link .road { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1 7; }
+.link .tip { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.link circle { fill: var(--gold); stroke: #fff; stroke-width: 2; }
+.link small { font: 400 10.5px/1.3 var(--mono); color: var(--ink-3); }
+.what .sticky { margin-top: 54px; }
+
+/* inside one mind: the section at night, so the neuron's branches glow */
+.mind { padding-block: 104px 40px; clip-path: inset(-30px 0 0 0); background-color: #0b1a48; }
+.mind > .tear { --tc: #0b1a48; }
+.mind-head { position: relative; z-index: 2; }
+.mind-head p { max-width: 560px; margin-top: 14px; }
+.stage { position: relative; max-width: 1300px; height: 650px; margin: 14px auto 0; }
+.graph { position: absolute; inset: 0; }
+.graph canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; }
+.hint { position: absolute; z-index: 2; right: 26px; bottom: 14px; font: 400 10.5px/1 var(--mono); color: rgba(255, 255, 255, .55); pointer-events: none; }
+.ask { position: absolute; z-index: 3; left: 30px; top: 50%; translate: 0 -50%; rotate: -1.2deg; width: 330px; min-height: 430px; display: flex; flex-direction: column; gap: 11px; padding: 20px 17px 17px; border-radius: 4px; background: var(--card); color: var(--ink); box-shadow: 0 34px 60px -30px rgba(4, 16, 60, .8); font-size: 13px; }
+.ask::before { content: ""; position: absolute; top: -12px; left: 50%; width: 96px; height: 24px; margin-left: -48px; background: var(--tape); rotate: 3deg; }
+.ask p { color: inherit; }
+.ask-top { display: flex; align-items: center; gap: 11px; padding-bottom: 12px; border-bottom: 1.5px dashed rgba(19, 32, 74, .15); }
+.face { width: 44px; height: 44px; flex: none; border-radius: 50%; object-fit: cover; border: 3px solid #fff; background: #f3ead8; box-shadow: 0 0 0 1.5px var(--cobalt), 0 6px 12px -6px rgba(0, 0, 0, .4); }
+.ask-top b { display: block; font: 700 25px/1 var(--hand); color: var(--ink); }
+.ask-top small { display: flex; align-items: center; gap: 6px; margin-top: 3px; font: 400 10.5px/1 var(--mono); color: var(--ink-3); }
+.live { width: 7px; height: 7px; border-radius: 50%; background: #2fbf86; animation: ping 1.8s infinite; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(47, 191, 134, .5); } 70%, 100% { box-shadow: 0 0 0 7px rgba(47, 191, 134, 0); } }
+.lbl { display: block; margin-bottom: 5px; font: 400 9.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; opacity: .7; }
+.bubble-q { align-self: flex-end; max-width: 90%; padding: 9px 13px 10px; border-radius: 16px 16px 4px 16px; background: var(--cobalt); color: #fff; }
+.bubble-q .q { font-size: 13.5px; line-height: 1.45; min-height: 1.45em; }
+.typing::after { content: ""; display: inline-block; width: 1.5px; height: 1em; margin-left: 2px; vertical-align: -2px; background: currentColor; animation: blink .8s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.status { min-height: 15px; font: 400 10.5px/1.4 var(--mono); color: var(--ink-3); }
+.status b { color: var(--poppy); font-weight: 500; }
+.recall { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.recall li { display: flex; align-items: center; gap: 9px; padding: 1px 4px; opacity: 0; transform: translateX(-8px); transition: opacity .45s var(--ease), transform .45s var(--ease); }
+.recall li.on { opacity: 1; transform: none; }
+.recall i { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 1.5px rgba(19, 32, 74, .28); }
+.recall span { flex: 1; font: 600 20px/1.15 var(--hand); color: var(--ink); }
+.recall small { font: 400 9.5px/1 var(--mono); color: var(--ink-3); }
+.bubble-a { margin-top: auto; max-width: 94%; padding: 10px 13px 11px; border-radius: 16px 16px 16px 4px; background: var(--note); opacity: 0; transform: translateY(6px); transition: opacity .45s var(--ease), transform .45s var(--ease); }
+.bubble-a.on { opacity: 1; transform: none; }
+.bubble-a .a { font-size: 13.5px; line-height: 1.45; }
+.ask .fade { transition: opacity .4s; }
+.ask.clearing .fade { opacity: 0; }
+
+/* one story, three minds: a comic strip, then what each of them can say */
+.scene { padding-block: 110px 96px; }
+.scene-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 30px; align-items: end; }
+.guide { position: relative; width: 210px; margin-right: 20px; }
+.guide img { height: 240px; width: auto; margin: 0 auto; }
+.guide figcaption { position: absolute; left: -150px; top: 26px; padding: 10px 14px 12px; border-radius: 16px 16px 4px 16px; background: #fff; font: 700 21px/1.05 var(--hand); color: var(--ink); white-space: nowrap; rotate: -4deg; box-shadow: 0 12px 24px -14px rgba(14, 28, 63, .5); }
+.strip { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; margin-top: 48px; }
+.frame { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.frame .pol { width: 100%; }
+.frame .pol figcaption { font-size: 20px; }
+.frame time { display: block; margin-bottom: 4px; font: 500 10.5px/1 var(--mono); letter-spacing: .08em; color: var(--ink-3); }
+.secret-tag { position: absolute; z-index: 2; top: 14px; right: -12px; padding: 5px 11px 6px; border-radius: 999px; background: var(--lilac); border: 3px solid #fff; font: 700 17px/1 var(--hand); color: var(--ink); rotate: 8deg; box-shadow: 0 8px 16px -8px rgba(14, 28, 63, .5); }
+.here { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 5px; }
+.here code { margin-right: 2px; font: 400 10.5px/1 var(--mono); color: var(--ink-3); }
+.here span { padding: 3px 9px 4px; border-radius: 999px; background: var(--c); font: 700 16px/1 var(--hand); color: #fff; }
+.here span.out { background: none; color: var(--ink-3); box-shadow: inset 0 0 0 1.5px var(--ink-3); text-decoration: line-through; }
+.question { display: flex; justify-content: center; margin-top: 52px; }
+.question .sticky { text-align: center; font-size: 23px; }
+.question .sticky span { display: block; font: 400 11px/1 var(--mono); letter-spacing: .06em; color: var(--ink-3); margin-bottom: 6px; }
+.answers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px; margin-top: 40px; }
+.ans { display: grid; grid-template-columns: 116px minmax(0, 1fr); gap: 14px 16px; align-items: center; }
+.ans .scard img { border-radius: 18px; border-width: 4px; }
+.ans .bubble { position: relative; z-index: 5; padding: 11px 14px 12px; border-radius: 16px; background: #fff; box-shadow: 0 12px 26px -16px rgba(14, 28, 63, .55); font: 700 21px/1.1 var(--hand); color: var(--ink); }
+.ans .bubble::before { content: ""; position: absolute; left: -6px; top: 50%; width: 14px; height: 14px; margin-top: -7px; background: #fff; rotate: 45deg; border-radius: 2px; }
+.knows { grid-column: 1 / -1; padding: 10px 14px 10px 32px; border-radius: 3px; background-color: #fff; background-image: linear-gradient(90deg, transparent 22px, rgba(230, 69, 47, .35) 22px 23px, transparent 23px), repeating-linear-gradient(transparent 0 21px, rgba(29, 85, 196, .12) 21px 22px); background-position: 0 0, 0 10px; box-shadow: 0 10px 22px -16px rgba(14, 28, 63, .5); font: 400 11.5px/22px var(--mono); color: var(--ink-2); }
+.knows dt { font: 700 18px/22px var(--hand); color: var(--c); }
+.knows dd.yes { color: var(--ink); }
+.knows dd.yes::before { content: "✦ "; color: #8a68e8; }
+.knows dd.no { color: var(--ink); }
+.knows dd.no::before { content: "✗ "; color: var(--poppy); }
+.js .strip .frame[data-r] { transform: translateY(26px) rotate(3deg); }
+.js .strip .frame[data-r].in { transform: none; }
+
+/* what lives in a mind: polaroids pinned to a board, each with an index card */
+.lives { padding-block: 108px 90px; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 46px 30px; margin-top: 52px; }
+.item { display: flex; flex-direction: column; }
+.item .pol { width: 86%; --ar: 4 / 5; }
+.index { position: relative; z-index: 5; width: 90%; margin: -10px 0 0 auto; padding: 14px 12px 10px 32px; rotate: var(--r, 2deg); background-color: #fff; background-image: linear-gradient(90deg, transparent 22px, rgba(230, 69, 47, .35) 22px 23px, transparent 23px), repeating-linear-gradient(transparent 0 19px, rgba(29, 85, 196, .13) 19px 20px); background-position: 0 0, 0 14px; box-shadow: 0 14px 26px -16px rgba(60, 40, 10, .6); font: 400 11px/20px var(--mono); color: var(--ink-2); transition: rotate .45s var(--ease), translate .45s var(--ease); }
+.index::before { content: ""; position: absolute; top: -7px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #ff9a8a, var(--poppy) 55%, #9c2a1a); box-shadow: 0 3px 4px rgba(0, 0, 0, .3); }
+.item:hover .index { rotate: 0deg; translate: 0 -6px; }
+.index b { display: block; font: 700 20px/20px var(--hand); color: var(--ink); }
+.index dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 10px; }
+.index dt { color: var(--ink-3); }
+.index dd { color: var(--ink); }
+.index .tip { font: 600 16px/20px var(--hand); color: var(--cobalt); }
+.bar { display: inline-block; width: 48px; height: 6px; margin-right: 6px; border-radius: 3px; vertical-align: 1px; background: linear-gradient(90deg, var(--cobalt) calc(var(--v) * 100%), rgba(29, 85, 196, .15) 0); }
+.item > p { margin-top: 18px; font-size: 13.5px; line-height: 1.55; color: #5b5546; }
+
+/* how it works */
+.how { padding-block: 108px 104px; }
+.how-grid { display: grid; grid-template-columns: .8fr 1.2fr; gap: 64px; align-items: center; }
+.how-grid > * { min-width: 0; }
+.how-img { width: 100%; max-width: 340px; justify-self: center; }
+.steps { list-style: none; margin: 26px 0; }
+.steps li { display: grid; grid-template-columns: 46px 1fr; gap: 12px; padding: 16px 0; border-bottom: 1.5px dashed rgba(29, 85, 196, .2); }
+.steps li:first-child { border-top: 1.5px dashed rgba(29, 85, 196, .2); }
+.steps b { font: 700 32px/1 var(--hand); color: var(--cobalt); }
+.steps h3 { font-size: 19px; margin-bottom: 4px; }
+.steps p { font-size: 14px; }
+.code-card { position: relative; rotate: -.8deg; }
+.code-card::before { content: ""; position: absolute; z-index: 1; top: -11px; left: 40px; width: 80px; height: 22px; background: var(--tape); rotate: -3deg; }
+.code { overflow-x: auto; padding: 20px 18px 16px; border-radius: 6px; background: #0e2153; color: #e2e8ff; font: 400 12px/1.8 var(--mono); box-shadow: 0 22px 44px -24px rgba(8, 22, 61, .7); }
+.code .k { color: #ff9b7d; } .code .s { color: #7ee8b5; } .code .c { color: #8a9bd8; } .code .f { color: #ffd166; }
+
+/* made for: each use with a line it makes possible */
+.made { padding-block: 108px 80px; }
+.uses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; margin-top: 60px; }
+.use { position: relative; display: flex; flex-direction: column; align-items: center; }
+.use .pol { width: 80%; --op: 50% 22%; }
+.speech { position: absolute; z-index: 6; top: -18px; right: -6px; max-width: 64%; padding: 10px 13px 11px; border-radius: 16px 16px 16px 4px; background: #fff; rotate: 4deg; box-shadow: 0 12px 24px -14px rgba(14, 28, 63, .55); font: 700 19px/1.1 var(--hand); color: var(--ink); text-align: left; transition: rotate .45s var(--ease), translate .45s var(--ease); }
+.use:hover .speech { rotate: 2deg; translate: 0 -8px; }
+.chips { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 22px; }
+.chips li { padding: 5px 10px; border-radius: 999px; background: #fff; border: 1.5px solid var(--line); font: 400 11px/1 var(--mono); color: var(--ink-2); }
+.made .sticky { margin-top: 62px; }
+.made .sticky span { color: var(--cobalt); }
+
+/* a dashed line to cut along, between the paper pages */
+.cutline { position: relative; max-width: 1072px; height: 0; margin: 0 auto; border-top: 2px dashed rgba(19, 32, 74, .2); }
+.cutline span { position: absolute; left: 6%; top: -15px; padding: 0 8px; background: var(--paper); font-size: 22px; line-height: 28px; color: var(--ink-2); }
+
+/* pricing: one index card for the beta, with Kiori and her jar of stars beside it; the access form under them */
+.pricing { padding-block: 80px 120px; }
+.plan { display: grid; grid-template-columns: 300px minmax(0, 440px); justify-content: center; align-items: center; gap: 64px; margin-top: 46px; }
+/* beside it, Kiori cut out with her jar of stars, standing in front of her own icon (tucked behind her, bottom right) */
+.duo { --u: 1; position: relative; width: calc(300px * var(--u)); justify-self: center; }
+.duo-art { position: relative; height: calc(364px * var(--u)); }
+.duo .ico { position: absolute; z-index: 1; left: calc(146px * var(--u)); top: calc(196px * var(--u)); width: calc(148px * var(--u)); height: auto; border: calc(5px * var(--u)) solid #fff; border-radius: 22%; box-shadow: 0 18px 32px -16px rgba(4, 16, 60, .55); rotate: 9deg; transition: rotate .45s var(--ease), translate .45s var(--ease); }
+.duo .mascot { position: absolute; z-index: 2; left: calc(28px * var(--u)); top: 0; width: auto; max-width: none; height: calc(360px * var(--u)); filter: drop-shadow(0 16px 18px rgba(14, 28, 63, .3)); transition: translate .45s var(--ease), rotate .45s var(--ease); }
+.duo:hover .mascot { translate: 0 calc(-6px * var(--u)); rotate: -2deg; }
+.duo:hover .ico { rotate: 4deg; translate: calc(6px * var(--u)) 0; }
+.duo figcaption { margin-top: 12px; font: 700 25px/1.05 var(--hand); color: var(--ink); text-align: center; rotate: -3deg; }
+.tier { position: relative; display: flex; flex-direction: column; padding: 30px 26px 24px; text-align: left; border-radius: 4px; background: var(--card); rotate: var(--r); box-shadow: 0 0 0 2px var(--cobalt), 0 22px 44px -24px rgba(29, 85, 196, .6); transition: rotate .4s var(--ease), translate .4s var(--ease), box-shadow .4s; }
+.tier::before { content: ""; position: absolute; top: -11px; left: 50%; width: 70px; height: 22px; margin-left: -35px; background: var(--tape); rotate: 3deg; }
+.tier:hover { rotate: 0deg; translate: 0 -5px; }
+.badge { position: absolute; top: -24px; right: -18px; width: 80px; height: 80px; display: grid; place-items: center; border-radius: 50%; background: var(--gold); border: 4px solid #fff; font: 700 18px/.95 var(--hand); color: var(--ink); text-align: center; rotate: 12deg; box-shadow: 0 10px 20px -10px rgba(0, 0, 0, .45); }
+.tier .name { font: 700 32px/1 var(--hand); }
+.tier .price { margin-top: 10px; font: 400 44px/1 var(--serif); }
+.tier .per { margin-top: 6px; font: 400 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.tier ul { list-style: none; margin: 18px 0 22px; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.tier li { display: flex; gap: 8px; }
+.tier li::before { content: "✦"; color: var(--gold); }
+.tier li:nth-child(even)::before { content: ""; flex: none; width: 13px; height: 13px; margin-top: 4px; background: var(--gold); -webkit-mask: var(--star) center / contain no-repeat; mask: var(--star) center / contain no-repeat; }
+.tier .cta { margin-top: auto; }
+.tier .cta .btn { flex: 1; justify-content: center; }
+.pricing .fine { margin-top: 26px; font-size: 12.5px; color: var(--ink-3); text-align: center; }
+/* asking for access: an index card under the plan, sent to the API's /v1/access */
+.access { position: relative; max-width: 640px; margin: 64px auto 0; padding: 30px 28px 24px; text-align: left; background: var(--card); border-radius: 4px; rotate: -.4deg; box-shadow: 0 18px 40px -24px rgba(20, 30, 70, .45); }
+.access h3 { margin: 6px 0 6px; font: 700 32px/1 var(--hand); }
+.access p { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-2); }
+.access .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.access label { display: block; margin: 14px 0 6px; font: 400 10.5px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.access input, .access textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: 400 14px/1.4 var(--sans); }
+.access textarea { min-height: 84px; resize: vertical; }
+.access input:focus, .access textarea:focus { outline: none; border-color: var(--cobalt); }
+.access .hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.access .send { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 18px; }
+.access button.btn { border: 0; cursor: pointer; }
+.access button.btn:disabled { opacity: .6; cursor: default; }
+.access .msg { font-size: 13px; color: var(--ink-2); }
+.access small { display: block; margin-top: 14px; font-size: 12px; color: var(--ink-3); }
+
+/* the end: the sticker between a pair of wings, everything on one centre line */
+.end { color: #fff; text-align: center; padding-block: 100px 30px; padding-left: max(var(--gut), env(safe-area-inset-left, 0px)); padding-right: max(var(--gut), env(safe-area-inset-right, 0px)); background-color: var(--cobalt); background-image: radial-gradient(rgba(255, 255, 255, .075) 1px, transparent 1.5px), linear-gradient(180deg, var(--cobalt) 0%, #1a4aa6 55%, var(--night) 100%); background-size: 7px 7px, auto; clip-path: inset(-30px 0 0 0); }
+.end-in { max-width: 1120px; margin: 0 auto; }
+.angel { position: relative; width: min(640px, 100%); aspect-ratio: 1000 / 672; margin: 0 auto; }
+.angel .wings { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: brightness(1.3) saturate(.65) drop-shadow(0 12px 22px rgba(0, 10, 50, .3)); animation: flap 6s ease-in-out infinite; }
+@keyframes flap { 50% { translate: 0 -8px; scale: 1.015; } }
+.angel .scard { position: absolute; left: 50%; top: 47%; width: 31%; translate: -50% -50%; }
+.end .hand { display: block; margin-top: 8px; font: 700 27px/1 var(--hand); color: var(--gold); rotate: -2deg; }
+.end h2 { margin-top: 26px; font-size: clamp(34px, 4.2vw, 54px); color: #fff; }
+.end p { color: rgba(255, 255, 255, .82); margin: 14px auto 26px; max-width: 420px; }
+.end .cta { justify-content: center; }
+.foot { display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 1120px; margin: 90px auto 0; padding-top: 26px; border-top: 1px solid rgba(255, 255, 255, .16); font-size: 12.5px; color: rgba(255, 255, 255, .75); }
+.foot nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; }
+.foot nav a:hover, .foot .logo:hover { color: #fff; }
+.foot small { font: 400 11px/1 var(--mono); letter-spacing: .06em; }
+
+/* settle into place on scroll, from a visible resting state */
+.js [data-r] { transform: translateY(16px); transition: transform 1s var(--ease), rotate .45s var(--ease), translate .45s var(--ease), scale .45s var(--ease), box-shadow .45s; }
+.js [data-r].in { transform: none; }
+
+@media (max-width: 1100px) {
+  .art-wrap { --s: .84; }
+  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 50px 40px; }
+  .answers { grid-template-columns: 1fr; max-width: 560px; margin-left: auto; margin-right: auto; }
+}
+@media (max-width: 980px) {
+  .plan { grid-template-columns: 240px minmax(0, 420px); gap: 40px; }
+  .duo { --u: .8; }
+  .how-grid { grid-template-columns: 1fr; gap: 44px; }
+  .how-img { max-width: 280px; }
+  .strip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 34px 26px; }
+  .uses { grid-template-columns: 1fr; max-width: 420px; margin-left: auto; margin-right: auto; gap: 56px; }
+}
+@media (max-width: 860px) {
+  .nav .links { display: none; }
+  .hero { padding-block: 96px 70px; }
+  .hero-in { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .art-wrap { --s: .78; justify-self: center; }
+  .flow { grid-template-columns: 1fr; justify-items: center; gap: 0; }
+  .link { margin: 18px 0 22px; }
+  .link svg { display: none; }
+  .link::before { content: "↓"; font: 700 32px/1 var(--hand); color: var(--ink-2); }
+  .mind { padding-top: 88px; }
+  .stage { height: auto; margin-top: 26px; }
+  .ask { position: relative; left: auto; top: auto; translate: none; rotate: none; width: auto; min-height: 380px; margin: 14px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); }
+  .graph { position: relative; height: 480px; }
+  .hint { right: 16px; }
+  .scene-head { grid-template-columns: 1fr; }
+  .guide { width: auto; margin: 0 auto; display: flex; align-items: center; gap: 4px; }
+  .guide figcaption { position: static; order: -1; }
+  .guide img { height: 200px; margin: 0; }
+  .plan { grid-template-columns: minmax(0, 420px); gap: 44px; }
+  .duo { --u: .78; }
+}
+@media (max-width: 560px) {
+  :root { --gut: 16px; }
+  .art-wrap { --s: .58; }
+  .access .two { grid-template-columns: 1fr; }
+  .access { padding: 24px 18px 20px; }
+  .strip { gap: 28px 16px; }
+  .frame .pol { padding: 7px 7px 0; }
+  .frame .pol figcaption { font-size: 16px; padding-block: 7px 10px; }
+  .here span { font-size: 14px; padding: 2px 7px 3px; }
+  .here code { display: none; }
+  .secret-tag { font-size: 14px; right: -8px; }
+  .ans { grid-template-columns: 92px minmax(0, 1fr); }
+  .board { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 80%; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; margin: 40px -16px 0; padding: 14px 16px 18px; scrollbar-width: none; }
+  .board::-webkit-scrollbar { display: none; }
+  .item { scroll-snap-align: start; }
+  .guide figcaption { font-size: 18px; }
+  .guide img { height: 180px; }
+  .what .sticky, .made .sticky { font-size: 21px; }
+}
+@media (max-width: 400px) { .art-wrap { --s: .55; } }
+/* the narrowest phones (320 px): the art fits beside nothing, so it fits the column */
+@media (max-width: 359px) { .art-wrap { --s: .48; } }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .js [data-r], .js .strip .frame[data-r] { transform: none; }
+}
+</style>
+</head>
+<body>
+<!-- Cloudflare leaves the addresses in here as they are: its email obfuscation adds a decoding script this page's
+     Content-Security-Policy would block, and the address would show as "[email protected]" -->
+<!--email_off-->
+
+<nav class="nav">
+  <a class="logo" href="/"><span class="halo"></span>kiori</a>
+  <div class="links"><a href="#mind">the mind</a><a href="#scene">many minds</a><a href="#how">how it works</a><a href="#pricing">pricing</a><a href="/docs">docs</a></div>
+  <a class="btn ink" href="/console">Sign in</a>
+</nav>
+
+<header class="hero cobalt" id="top">
+  <div class="hero-in">
+    <div class="hero-copy">
+      <span class="tag">✦ brains for characters</span>
+      <h1>Give every character a mind of <em>their own.</em></h1>
+      <p>Kiori gives each of your characters a brain: what they remember, what they never saw, who they love, what they hide. Your app keeps the chat, the model and the brains. We store no brains and no chats.</p>
+      <div class="cta"><a class="btn solid" href="#access">Request access</a><a class="btn ghost" href="#mind">Watch a mind think ↓</a></div>
+      <span class="scribble">free while we're in private beta <i class="star5"></i></span>
+    </div>
+    <div class="art-wrap">
+      <div class="art">
+        <figure class="scard big" style="--r:-3deg"><img src="/site/img/kiori-icon.webp" alt="Kiori, the blue-haired mascot, peeking up from the bottom of the card with a wink, a peace sign and her crooked halo" width="760" height="760"><figcaption>she never forgets a face <i class="star5"></i></figcaption></figure>
+        <figure class="pol p1" style="--r:-9deg"><img src="/site/img/pier.webp" alt="A pier with a little lighthouse under the moon" width="520" height="520"><figcaption>the pier, last june</figcaption></figure>
+        <figure class="pol p2" style="--r:7deg; --ar:3/2; --op:50% 70%"><img src="/site/img/hero-sm.webp" alt="A white marble temple on a hill above a field of poppies" width="1200" height="514"><figcaption>where she grew up</figcaption></figure>
+        <span class="hello" aria-hidden="true">hi, I'm Kiori!<svg viewBox="0 0 62 46"><path d="M58 4C44 6 26 16 10 38"/><path d="M6 26l4 13 12-5"/></svg></span>
+        <span class="spark s1" aria-hidden="true"><i class="star5"></i></span><span class="spark s2" aria-hidden="true">✦</span><span class="spark s3" aria-hidden="true"><i class="star5"></i></span>
+        <span class="spark s4" aria-hidden="true">✦</span><span class="spark s5" aria-hidden="true"><i class="star5"></i></span><span class="spark s6" aria-hidden="true">✦</span><span class="spark s7" aria-hidden="true"><i class="star5"></i></span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="tape-strip" aria-hidden="true"><div class="band"><div class="track">
+  <span>remembers what they lived</span><span>forgets slowly, like people do</span><span>never knows what they didn't see</span><span>keeps secrets</span><span>holds grudges</span><span>falls in love</span><span>changes their mind</span><span>any model, any language</span>
+  <span>remembers what they lived</span><span>forgets slowly, like people do</span><span>never knows what they didn't see</span><span>keeps secrets</span><span>holds grudges</span><span>falls in love</span><span>changes their mind</span><span>any model, any language</span>
+</div></div></div>
+
+<section class="what paper torn center" id="what">
+  <div class="tear"></div>
+  <div class="wrap">
+    <span class="kicker" data-r>what kiori is</span>
+    <h2 data-r="1">Not a chatbot. <em>The mind behind yours.</em></h2>
+    <p class="lede" data-r="2">Your app does the talking and your model writes every line. Kiori is the part that remembers: it builds each character's brain, updates it as the story moves, and right before they speak, hands your model exactly what that character knows. The brain itself stays with you.</p>
+    <div class="flow">
+      <figure class="step" data-r="1">
+        <div class="scard" style="--r:-4deg"><img src="/site/img/icon-app.webp" alt="A retro phone with a chat on its screen" width="440" height="440" loading="lazy"></div>
+        <figcaption><b>your app</b><small>your chat, your UI, your users</small></figcaption>
+      </figure>
+      <div class="link" data-r="2">
+        <q>what do you remember about summer?</q>
+        <svg viewBox="0 0 150 44" aria-hidden="true"><path class="road" d="M6 30C46 4 104 4 144 26"/><path class="tip" d="M132 15l12 11-15 5"/><circle r="5"><animateMotion dur="2.6s" repeatCount="indefinite" path="M6 30C46 4 104 4 144 26"/></circle></svg>
+        <small>the moment, and who's there</small>
+      </div>
+      <figure class="step" data-r="3">
+        <div class="scard" style="--r:3deg"><img src="/site/img/icon-mind.webp" alt="A glass jar of glowing stars with a little halo" width="440" height="440" loading="lazy"></div>
+        <figcaption><b>kiori</b><small>finds what this character knows, and what they don't</small><code>search, not generation</code></figcaption>
+      </figure>
+      <div class="link" data-r="4">
+        <q>the pool at night, grandma's balcony…</q>
+        <svg viewBox="0 0 150 44" aria-hidden="true"><path class="road" d="M6 30C46 4 104 4 144 26"/><path class="tip" d="M132 15l12 11-15 5"/><circle r="5"><animateMotion dur="2.6s" begin="1.3s" repeatCount="indefinite" path="M6 30C46 4 104 4 144 26"/></circle></svg>
+        <small>memories, feelings, blind spots</small>
+      </div>
+      <figure class="step" data-r="5">
+        <div class="scard" style="--r:-2deg"><img src="/site/img/icon-model.webp" alt="A smiling retro computer with a pencil" width="440" height="440" loading="lazy"></div>
+        <figcaption><b>your model</b><small>any LLM writes the reply, in character</small></figcaption>
+      </figure>
+    </div>
+    <p class="sticky" data-r="3">you keep the chat and the model. <b>we build the mind.</b></p>
+  </div>
+</section>
+
+<section class="mind cobalt torn" id="mind">
+  <div class="tear"></div>
+  <div class="wrap mind-head">
+    <span class="kicker" data-r>inside one mind</span>
+    <h2 data-r="1">Ask anything. <em>Watch it remember.</em></h2>
+    <p data-r="2">Every character gets a brain like this: memories, people, feelings, places and secrets, each on its own branch. When your user speaks, the right ones light up in a fraction of a second. It's search, not generation, so it costs next to nothing.</p>
+  </div>
+  <div class="stage" role="img" aria-label="An animated neuron with Kiori's head at its centre and a branch for each kind of memory: a question comes in, a signal runs out along the branches, and the memories that answer it light up.">
+    <aside class="ask" aria-hidden="true">
+      <div class="ask-top"><img class="face" src="/site/img/face-laugh.webp" alt=""><div><b>ask her anything</b><small><i class="live"></i>live</small></div></div>
+      <div class="bubble-q fade"><span class="lbl">your user</span><p class="q">what do you remember about summer?</p></div>
+      <div class="status fade">✦ 3 things came to mind · handed to your model</div>
+      <ul class="recall fade">
+        <li class="on"><i style="--c:#fbf8f1"></i><span>the pool at night</span><small>memory</small></li>
+        <li class="on"><i style="--c:#a8deff"></i><span>grandma's balcony</span><small>place</small></li>
+        <li class="on"><i style="--c:#ff9cbc"></i><span>missing someone</span><small>feeling</small></li>
+      </ul>
+      <div class="bubble-a on fade"><span class="lbl">your model, with what she knows</span><p class="a">the pool at night. grandma humming on the balcony. why, do you miss it too?</p></div>
+    </aside>
+    <div class="graph">
+      <canvas></canvas>
+      <span class="hint"></span>
+    </div>
+  </div>
+</section>
+
+<section class="scene paper torn" id="scene">
+  <div class="tear"></div>
+  <div class="wrap">
+    <div class="scene-head">
+      <div>
+        <span class="kicker" data-r>one story, three minds</span>
+        <h2 data-r="1">Everyone remembers the scene <em>from where they stood.</em></h2>
+        <p class="lede" data-r="2">Tell Kiori what happened and who was in the room. A secret told to one character never reaches the others, and you don't write a single rule for it.</p>
+      </div>
+      <figure class="guide" data-r="2"><img class="cut" src="/site/img/mascot-shh.webp" alt="The mascot with a finger on her lips, winking" width="346" height="760" loading="lazy"><figcaption>shh… Rosa wasn't there <i class="star5"></i></figcaption></figure>
+    </div>
+    <ol class="strip">
+      <li class="frame" data-r="1">
+        <figure class="pol" style="--r:-3deg"><img src="/site/img/panel-1.webp" alt="Mei, Kai and Rosa laughing together at a café table" width="640" height="640" loading="lazy"><figcaption><time>6:00 pm</time>coffee, all three</figcaption></figure>
+        <p class="here"><code>present</code><span style="--c:var(--mei)">Mei</span><span style="--c:var(--kai)">Kai</span><span style="--c:var(--rosa)">Rosa</span></p>
+      </li>
+      <li class="frame" data-r="2">
+        <figure class="pol" style="--r:2deg"><img src="/site/img/panel-2.webp" alt="Rosa outside the café, laughing on her phone" width="640" height="640" loading="lazy"><figcaption><time>6:12 pm</time>Rosa takes a call outside</figcaption></figure>
+        <p class="here"><code>present</code><span style="--c:var(--mei)">Mei</span><span style="--c:var(--kai)">Kai</span><span class="out">Rosa</span></p>
+      </li>
+      <li class="frame" data-r="3">
+        <figure class="pol" style="--r:-2deg"><img src="/site/img/panel-3.webp" alt="Mei whispering into Kai's ear while Rosa's chair is empty" width="640" height="640" loading="lazy"><figcaption><time>6:14 pm</time>Mei tells Kai a secret</figcaption><span class="secret-tag"><i class="star5"></i> secret</span></figure>
+        <p class="here"><code>present</code><span style="--c:var(--mei)">Mei</span><span style="--c:var(--kai)">Kai</span><span class="out">Rosa</span></p>
+      </li>
+      <li class="frame" data-r="4">
+        <figure class="pol" style="--r:3deg"><img src="/site/img/panel-4.webp" alt="Rosa back at the table asking a question, Mei sipping coffee innocently" width="640" height="640" loading="lazy"><figcaption><time>6:20 pm</time>“so, what did I miss?”</figcaption></figure>
+        <p class="here"><code>present</code><span style="--c:var(--mei)">Mei</span><span style="--c:var(--kai)">Kai</span><span style="--c:var(--rosa)">Rosa</span></p>
+      </li>
+    </ol>
+    <div class="question" data-r="2"><p class="sticky"><span>later, someone asks each of them</span>“what's Mei's big news?”</p></div>
+    <div class="answers">
+      <article class="ans" style="--c:var(--mei)" data-r="1">
+        <div class="scard" style="--r:-3deg"><img src="/site/img/cast-mei-head.webp" alt="Mei" width="320" height="320" loading="lazy"></div>
+        <p class="bubble">Paris!! …but shh, not yet.</p>
+        <dl class="knows"><dt>Mei's mind</dt><dd class="yes">got into art school in Paris</dd><dd>her secret · told Kai at 6:14</dd></dl>
+      </article>
+      <article class="ans" style="--c:var(--kai)" data-r="2">
+        <div class="scard" style="--r:2deg"><img src="/site/img/cast-kai-head.webp" alt="Kai" width="320" height="320" loading="lazy"></div>
+        <p class="bubble">Not mine to tell.</p>
+        <dl class="knows"><dt>Kai's mind</dt><dd class="yes">Mei got into Paris</dd><dd>heard it at 6:14 · a secret</dd></dl>
+      </article>
+      <article class="ans" style="--c:var(--rosa)" data-r="3">
+        <div class="scard" style="--r:-2deg"><img src="/site/img/cast-rosa-head.webp" alt="Rosa" width="320" height="320" loading="lazy"></div>
+        <p class="bubble">News? She's been quiet all day.</p>
+        <dl class="knows"><dt>Rosa's mind</dt><dd class="no">nothing about Paris</dd><dd>was outside 6:12 – 6:20</dd></dl>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="lives kraft torn" id="lives">
+  <div class="tear"></div>
+  <div class="wrap">
+    <span class="kicker" data-r>what lives in a mind</span>
+    <h2 data-r="1">Everything a person carries. <em>Kept per character.</em></h2>
+    <div class="board">
+      <article class="item" data-r="1">
+        <figure class="pol" style="--r:-3deg"><img src="/site/img/pool.webp" alt="An empty marble pool at night under a full moon" width="760" height="960" loading="lazy"><figcaption>memories that fade</figcaption></figure>
+        <div class="index" style="--r:3deg"><b>the pool at night</b><dl><dt>kind</dt><dd>memory</dd><dt>strength</dt><dd><i class="bar" style="--v:.74"></i>0.74</dd><dt>importance</dt><dd><i class="bar" style="--v:.6"></i>0.60</dd></dl><p class="tip">fades unless it matters to her</p></div>
+        <p>They remember what they lived. Small things blur, big ones stay, and a night's sleep turns days into stories.</p>
+      </article>
+      <article class="item" data-r="2">
+        <figure class="pol" style="--r:2deg"><img src="/site/img/door.webp" alt="A wooden door left ajar in a white marble wall" width="760" height="960" loading="lazy"><figcaption>secrets that stay put</figcaption></figure>
+        <div class="index" style="--r:-2deg"><b>the letter she never sent</b><dl><dt>kind</dt><dd>secret</dd><dt>known by</dt><dd>only her</dd><dt>hidden</dt><dd>from everyone</dd></dl><p class="tip">never leaks into another mind</p></div>
+        <p>Each mind knows only what it saw, heard or was told. A whisper stays with the people in the room.</p>
+      </article>
+      <article class="item" data-r="3">
+        <figure class="pol" style="--r:-2deg"><img src="/site/img/cypress.webp" alt="Two cypress trees leaning toward each other under the moon" width="760" height="960" loading="lazy"><figcaption>people they care about</figcaption></figure>
+        <div class="index" style="--r:2.5deg"><b>her older brother</b><dl><dt>kind</dt><dd>person</dd><dt>trust</dt><dd><i class="bar" style="--v:.86"></i>86</dd><dt>note</dt><dd>owes him a ride home</dd></dl><p class="tip">shifts with every scene</p></div>
+        <p>Trust, debts, crushes and grudges, person by person, updated as the story moves.</p>
+      </article>
+      <article class="item" data-r="4">
+        <figure class="pol" style="--r:3deg"><img src="/site/img/bust.webp" alt="A marble bust whose head opens into a starry sky" width="760" height="960" loading="lazy"><figcaption>an inner life</figcaption></figure>
+        <div class="index" style="--r:-3deg"><b>today</b><dl><dt>mood</dt><dd>hopeful</dd><dt>wants</dt><dd>to be remembered</dd><dt>built on</dt><dd>99% human</dd></dl><p class="tip">+ the 1% that's only her</p></div>
+        <p>Moods that carry over, habits, fears and beliefs. Built from the 99% everyone shares, plus the 1% that's only theirs.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="how gridp torn" id="how">
+  <div class="tear"></div>
+  <div class="wrap how-grid">
+    <figure class="pol how-img" style="--r:-3deg; --ar:4/5" data-r><img src="/site/img/girl-stairs.webp" alt="The blue-haired girl skipping up white marble stairs through a field of poppies" width="760" height="960" loading="lazy"><figcaption>one step at a time</figcaption></figure>
+    <div>
+      <span class="kicker" data-r>how it works</span>
+      <h2 data-r="1">Three calls. <em>That's the whole integration.</em></h2>
+      <ol class="steps" data-r="2">
+        <li><b>1</b><div><h3>Describe them</h3><p>Send a character card, or a name and a paragraph. In about a minute Kiori builds a whole brain: a past, the people in it, an inner world. In a hurry? A light brain is instant.</p></div></li>
+        <li><b>2</b><div><h3>Tell it what happens</h3><p>Send the brain and the chat as it unfolds; the brain comes back wiser. Everyone learns only what they witnessed.</p></div></li>
+        <li><b>3</b><div><h3>Ask before they speak</h3><p>Get what your model needs in a fraction of a second: memories, feelings, and what they don't know. Optionally, check a draft for leaks before it's shown.</p></div></li>
+      </ol>
+      <div class="code-card" data-r="3"><pre class="code"><span class="k">let</span> ava = <span class="k">await</span> kiori.<span class="f">create</span>({ name: <span class="s">'Ava'</span>, description })   <span class="c">// you keep it</span>
+({ brain: ava } = <span class="k">await</span> kiori.<span class="f">organize</span>({ brain: ava, messages }))   <span class="c">// it learns</span>
+<span class="k">const</span> { text } = <span class="k">await</span> kiori.<span class="f">recall</span>({ brain: ava, messages })   <span class="c">// what she knows now</span></pre></div>
+    </div>
+  </div>
+</section>
+
+<section class="made paper torn center" id="made">
+  <div class="tear"></div>
+  <div class="wrap">
+    <span class="kicker" data-r>made for</span>
+    <h2 data-r="1">People who make <em>characters.</em></h2>
+    <p class="lede" data-r="2">Companion apps, games, visual novels, roleplay worlds. Bring your own model and your own chat; Kiori slots in behind them.</p>
+    <div class="uses">
+      <article class="use" data-r="1">
+        <figure class="pol" style="--r:-4deg"><img src="/site/img/girl-laugh.webp" alt="The girl laughing, fixing her halo" width="760" height="950" loading="lazy"><figcaption>companion apps</figcaption></figure>
+        <p class="speech">you had that exam today, right? how did it go?</p>
+        <ul class="chips"><li>remembers what you told her</li><li>moods carry over</li><li>months, not minutes</li></ul>
+      </article>
+      <article class="use" data-r="2">
+        <figure class="pol" style="--r:3deg"><img src="/site/img/girl-column.webp" alt="The girl sitting on a marble column, winking" width="760" height="960" loading="lazy"><figcaption>games &amp; NPCs</figcaption></figure>
+        <p class="speech">you're the one who sold me that cursed sword.</p>
+        <ul class="chips"><li>a mind for every NPC</li><li>rumors reach only who heard them</li><li>grudges that last</li></ul>
+      </article>
+      <article class="use" data-r="3">
+        <figure class="pol" style="--r:-2deg"><img src="/site/img/girl-cloud.webp" alt="The girl on a cloud with headphones, blowing a bubble" width="760" height="950" loading="lazy"><figcaption>interactive stories</figcaption></figure>
+        <p class="speech">wait… who told you about the letter?</p>
+        <ul class="chips"><li>who was in each scene</li><li>secrets stay put</li><li>drafts checked for leaks</li></ul>
+      </article>
+    </div>
+    <p class="sticky" data-r="2">if your characters talk, they deserve to <span>remember</span> <i class="star5"></i></p>
+  </div>
+</section>
+
+<div class="cutline" aria-hidden="true"><span>✂</span></div>
+
+<section class="pricing paper center" id="pricing">
+  <div class="wrap">
+    <span class="kicker" data-r>pricing</span>
+    <h2 data-r="1">Free while we're <em>in beta.</em></h2>
+    <div class="plan" data-r="2">
+      <figure class="duo">
+        <div class="duo-art"><img class="ico" src="/site/img/kiori-icon.webp" alt="" width="760" height="760" loading="lazy"><img class="mascot" src="/site/img/mascot-jar.webp" alt="Kiori, the blue-haired mascot with a crooked halo, holding up a jar of glowing stars" width="339" height="760" loading="lazy"></div>
+        <figcaption>every star is a memory <i class="star5"></i></figcaption>
+      </figure>
+      <div class="tier" style="--r:.8deg">
+        <span class="badge">private<br>beta</span>
+        <span class="name">Beta</span>
+        <span class="price">$0</span>
+        <span class="per">while the beta lasts</span>
+        <ul>
+          <li>Every call: create, recall, organize, check and the drop-in</li>
+          <li>As many characters as you like</li>
+          <li>Your own model key: you pay your provider, Kiori adds nothing</li>
+          <li>JavaScript and Python SDKs, and a SillyTavern extension</li>
+          <li>A direct line to us: what you tell us shapes what we build</li>
+        </ul>
+        <div class="cta"><a class="btn ink" href="#access">Request access</a><a class="btn line" href="mailto:help@kiori.io?subject=Kiori">Contact us</a></div>
+      </div>
+    </div>
+    <form class="access" id="access" data-r="3" novalidate>
+      <span class="kicker">private beta</span>
+      <h3>Ask for access</h3>
+      <p>Tell us what you're building and we'll email you a sign-in link. You bring your own model key (OpenRouter, OpenAI or Gemini) and pay your provider directly.</p>
+      <div class="two"><div><label for="a-email">Email</label><input id="a-email" name="email" type="email" required autocomplete="email"></div><div><label for="a-name">Name</label><input id="a-name" name="name" autocomplete="name"></div></div>
+      <label for="a-company">Company or project</label><input id="a-company" name="company" autocomplete="organization">
+      <label for="a-use">What are you building?</label><textarea id="a-use" name="use_case" placeholder="A character chat app, a game with NPCs that remember, interactive fiction…"></textarea>
+      <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <div class="send"><button class="btn ink" type="submit">Request access</button><span class="msg" role="status"></span></div>
+      <small>We use what you write here only to answer your request. Rather write to us? <a href="mailto:help@kiori.io?subject=Kiori">help@kiori.io</a></small>
+    </form>
+    <p class="fine" data-r="3">What comes after the beta isn't decided yet. Beta projects hear first, well before anything changes.</p>
+  </div>
+</section>
+
+<footer class="end cobalt torn" id="end">
+  <div class="tear"></div>
+  <div class="end-in">
+    <div class="angel" data-r>
+      <img class="wings" src="/site/img/wings.webp" alt="" width="1000" height="672" loading="lazy">
+      <figure class="scard" style="--r:-3deg"><img src="/site/img/kiori-icon.webp" alt="Kiori peeking up from the bottom of the card, winking with a peace sign" width="760" height="760" loading="lazy"></figure>
+    </div>
+    <span class="hand" data-r="1">i'll keep their secrets <i class="star5"></i></span>
+    <h2 data-r="1">Let them <em>remember.</em></h2>
+    <p data-r="2">Free during the beta, three calls to wire in, and their secrets stay theirs.</p>
+    <div class="cta" data-r="2"><a class="btn solid" href="#access">Request access</a><a class="btn ghost" href="/docs">Read the docs</a></div>
+  </div>
+  <div class="foot">
+    <a class="logo" href="/"><span class="halo"></span>kiori</a>
+    <nav><a href="/docs">docs</a><a href="/docs/integration">integration</a><a href="/docs/api">api</a><a href="/docs/security">security</a><a href="mailto:help@kiori.io">contact</a><a href="/console">sign in</a></nav>
+    <small>© 2026 kiori · brains for characters</small>
+  </div>
+</footer>
+
+<script>
+// Page motion: things settle into place as they scroll in, and the nav turns solid.
+(() => {
+  const io = new IntersectionObserver(entries => entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }), { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('[data-r]').forEach(el => { const d = (+el.dataset.r || 0) * 110; el.style.transitionDelay = `${d}ms, 0s, 0s, 0s, 0s`; io.observe(el); });
+  const nav = document.querySelector('.nav');
+  let queued = 0;
+  addEventListener('scroll', () => { queued ||= requestAnimationFrame(() => { queued = 0; nav.classList.toggle('solid', scrollY > 30); }); }, { passive: true });
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) document.querySelectorAll('.link svg').forEach(s => s.pauseAnimations?.());
+})();
+
+// Asking for access: the form under the plan goes to the API (on kiori.io, at api.kiori.io)
+(() => {
+  const f = document.getElementById('access');
+  f.addEventListener('submit', async e => {
+    e.preventDefault();
+    const msg = f.querySelector('.msg'), btn = f.querySelector('button'), data = Object.fromEntries(new FormData(f));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email || '')) { msg.textContent = 'Please enter a valid email.'; return; }
+    btn.disabled = true; msg.textContent = 'Sending…';
+    try {
+      const r = await fetch('/v1/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      if (r.status === 429) throw new Error('Too many requests from here. Please try again later.');
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.error?.message || 'Something went wrong. Please try again.');
+      f.reset(); msg.textContent = "Thanks! We'll email you a sign-in link soon.";
+    } catch (err) { msg.textContent = err instanceof TypeError ? "Kiori can't be reached right now. Please try again in a while, or email help@kiori.io." : err.message; }
+    btn.disabled = false;
+  });
+})();
+
+const TAU = Math.PI * 2;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const easeBack = x => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// The mind: a neuron with Kiori's head at its centre, as a sticker, and five main branches, one for each kind of
+// thing a mind holds (memories, people, feelings, places, secrets), each in its colour and named at its end. It's an
+// illustration (seeded, not a real character), but it moves the way Kiori's recall does: a question comes in, a signal
+// runs out along the branches, and the memories that answer it light up as stickers. No text is drawn over other
+// text: every sticker looks for a spot clear of the names, the head and the other stickers.
+const bootBrain = () => {
+  const stage = document.querySelector('.stage');
+  const graph = stage.querySelector('.graph');
+  const canvas = graph.querySelector('canvas');
+  const ctx = canvas.getContext('2d');
+  const panel = stage.querySelector('.ask');
+  const hint = graph.querySelector('.hint');
+  const wideQuery = matchMedia('(min-width: 861px)');
+
+  const rngOf = seed => () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const any = a => a[Math.floor(Math.random() * a.length)];
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const mix = (a, b, t) => `rgb(${rgb(a).map((v, i) => Math.round(v + (rgb(b)[i] - v) * t)).join(',')})`;
+  const overlap = (p, q, m = 0) => p.x < q.x + q.w + m && p.x + p.w + m > q.x && p.y < q.y + q.h + m && p.y + p.h + m > q.y;
+
+  const KINDS = {
+    memory: { color: '#fbf8f1', name: 'memories', words: ['first snow', 'a missed train', 'the red bicycle', "summer of '09", 'a note in a coat pocket', 'the school play', 'the last phone call', 'fireworks over the bay', 'a borrowed sweater', 'a faded polaroid', 'the night bus home', 'the first apartment', 'sunburnt shoulders', 'a song on the radio'] },
+    person: { color: '#ffb59e', name: 'people', words: ['the girl next door', 'an old teacher', 'mom', 'the barista who knows her order', 'her best friend', 'the landlord', 'dad, mostly absent', 'the neighbor with the dog', 'a cousin she misses'] },
+    feeling: { color: '#ff9cbc', name: 'feelings', words: ['homesick', 'proud, secretly', 'a little jealous', 'calm', 'fond', 'hopeful', 'embarrassed', 'grateful', 'lonely on sundays', 'silence after a fight'] },
+    place: { color: '#a8deff', name: 'places', words: ['the pier', 'the library roof', 'the corner bakery', 'the lighthouse road', 'platform 4', 'the old cinema', 'the bridge at dusk', 'the old town'] },
+    secret: { color: '#d4c0ff', name: 'secrets', words: ['the letter she never sent', 'what really happened in june', 'the second key', 'the scar story', 'the money in the tin', 'the night she almost left'] },
+  };
+  const ORDER = ['memory', 'person', 'feeling', 'place', 'secret'];
+  const GOLD = '#ffd36e';
+
+  // Kiori's face for the head sticker, the same ones the card beside it shows
+  const faces = Object.fromEntries(['think', 'laugh', 'wink', 'wow'].map(f => { const img = new Image(); img.src = `/site/img/face-${f}.webp`; img.onload = () => !raf && W && render(performance.now()); return [f, img]; }));
+  let faceKey = 'laugh';
+
+  // ---- the neuron: grown from a seed, so it's the same at every visit, and scaled to the room it has ----
+  let W = 0, H = 0, dpr = 1, wide = true, small = false, area, T = [], root, R = 0, headR = 30, puncta = [], blocked = [], names = [];
+  const off = document.createElement('canvas');
+  const add = n => { n.kids = []; n.i = T.length; T.push(n); if (n.p >= 0) T[n.p].kids.push(n.i); return n.i; };
+  const pathTo = i => { const p = []; for (let j = i; j >= 0; j = T[j].p) p.push(j); return p.reverse(); };
+  function grow() {
+    const rng = rngOf(20261030);
+    T = [];
+    const cx = (area.x0 + area.x1) / 2, cy = (area.y0 + area.y1) / 2 + (small ? 4 : 8);
+    root = T[add({ x: cx, y: cy, w: 3, p: -1, dist: 0, depth: 0, root: true })];
+    const seg = R / 26, startW = small ? 2.5 : 3, endW = .5, taper = (startW - endW) / (R * 1.05);
+    const branch = (from, a, w, depth, kind, left) => {
+      let prev = from;
+      while (left > 0) {
+        a += (rng() - .5) * .38;
+        const P = T[prev], len = seg * (.7 + rng() * .6);
+        left -= len; w = Math.max(endW, w - taper * len);
+        prev = add({ x: P.x + Math.cos(a) * len, y: P.y + Math.sin(a) * len, w, p: prev, dist: P.dist + len, depth, kind });
+        if (depth < 5 && left > seg * 2 && rng() < .19 * .88 ** depth) {
+          const s = rng() < .5 ? -1 : 1, fork = .3 + rng() * .4;
+          branch(prev, a + s * fork, w * .82, depth + 1, kind, left * (.35 + rng() * .35));
+          a -= s * fork * .3;
+        }
+      }
+    };
+    // two main branches per kind, the five kinds around the head like a star
+    ORDER.forEach((kind, k) => { const mid = -Math.PI / 2 + k / 5 * Math.PI * 2; for (const d of [-.2, .2]) branch(root.i, mid + d + (rng() - .5) * .15, startW, 0, kind, R * (.84 + rng() * .26)); });
+    // memories: mostly at the tips, some along the way
+    const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const tips = shuffle(T.filter(n => n.p >= 0 && !n.kids.length && n.dist > headR + 12));
+    const mids = shuffle(T.filter(n => n.p >= 0 && n.kids.length === 1 && n.dist > headR + 24));
+    const count = small ? 34 : 46, next = Object.fromEntries(ORDER.map(k => [k, 0]));
+    puncta = [...tips.slice(0, Math.round(count * .7)), ...mids.slice(0, Math.round(count * .3))]
+      .map(n => ({ n, kind: n.kind, label: KINDS[n.kind].words[next[n.kind]++ % KINDS[n.kind].words.length], tw: rng() * Math.PI * 2 }));
+  }
+
+  // ---- the still picture, painted once per size: a soft cobalt glow, the branches, each kind's name ----
+  function paint() {
+    off.width = canvas.width; off.height = canvas.height;
+    const c = off.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const g = c.createRadialGradient(root.x, root.y, headR, root.x, root.y, R * 1.5);
+    g.addColorStop(0, 'rgba(46, 96, 210, .75)'); g.addColorStop(.55, 'rgba(36, 80, 190, .38)'); g.addColorStop(1, 'rgba(29, 70, 170, 0)');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.lineCap = 'round';
+    const buckets = new Map();
+    for (const n of T) {
+      if (n.p < 0) continue;
+      const [r, gg, b] = rgb(KINDS[n.kind].color), key = `rgba(${r}, ${gg}, ${b}, ${n.w > 1.2 ? .95 : n.w > .7 ? .8 : .6})|${Math.round(n.w * 4) / 4}`;
+      (buckets.get(key) ?? buckets.set(key, []).get(key)).push(n);
+    }
+    const stroke = () => { for (const [key, list] of buckets) { const [col, w] = key.split('|'); c.strokeStyle = col; c.lineWidth = +w; c.beginPath(); for (const n of list) { const P = T[n.p]; c.moveTo(P.x, P.y); c.lineTo(n.x, n.y); } c.stroke(); } };
+    c.save(); c.shadowBlur = 4; c.shadowColor = 'rgba(255, 255, 255, .35)'; c.globalAlpha = .5; stroke(); c.restore();
+    stroke();
+    c.font = names.font; c.textBaseline = 'middle';
+    for (const l of names) { c.fillStyle = KINDS[l.kind].color; c.fillText(l.text, l.x, l.y + l.h / 2 + 1); }
+  }
+
+  // ---- fit: the room beside the card (or under it, on a phone), the neuron in it, the names around it ----
+  function fit() {
+    dpr = Math.min(2, devicePixelRatio || 1);
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    wide = wideQuery.matches;
+    const left = wide ? panel.offsetLeft + panel.offsetWidth + 16 : 0;
+    area = { x0: left, x1: W, y0: wide ? 12 : 28, y1: H - 28 };
+    small = area.x1 - area.x0 < 600;
+    headR = small ? 26 : 36;
+    const room = small ? 30 : 44;
+    R = Math.max(90, Math.min((area.x1 - area.x0) / 2 - room - 24, (area.y1 - area.y0) / 2 - room));
+    grow();
+    // each kind's name just past the end of its branches, kept inside the picture
+    const font = small ? '700 18px Caveat, "Bradley Hand", cursive' : '700 23px Caveat, "Bradley Hand", cursive';
+    ctx.font = font;
+    names = ORDER.map((kind, k) => {
+      const a = -Math.PI / 2 + k / 5 * Math.PI * 2, text = KINDS[kind].name, w = ctx.measureText(text).width, h = small ? 20 : 26;
+      const x = Math.max(area.x0 + 6, Math.min(area.x1 - w - 6, root.x + Math.cos(a) * (R + room * .62) - w / 2));
+      const y = Math.max(area.y0 + 2, Math.min(area.y1 - h - 2, root.y + Math.sin(a) * (R + room * .55) - h / 2));
+      return { kind, text, x, y, w, h };
+    });
+    names.font = font;
+    // what stickers keep clear of: the names, the head and its halo, the note in the corner
+    blocked = [...names, { x: root.x - headR - 8, y: root.y - headR - 22, w: 2 * headR + 16, h: 2 * headR + 30 }, { x: W - 300, y: H - 26, w: 300, h: 26 }];
+    paint();
+    // a new size grows the neuron anew: what was lit or tagged on the old one goes
+    tags.length = 0; lit.clear(); held.clear(); flares.clear();
+    hover.want = hover.n = hover.tag = null;
+    hint.textContent = `an illustration · ${puncta.length} memories on ${ORDER.length * 2} branches${wide ? ' · point at one' : ''}`;
+    if (W && H) render(performance.now());
+  }
+
+  // ---- stickers: a white tag with a coloured dot, tied to its memory by a dashed thread ----
+  const tags = [];
+  const stickerFont = () => (small ? '700 15px Caveat, "Bradley Hand", cursive' : '700 18px Caveat, "Bradley Hand", cursive');
+  // The nearest spot beside a memory that's inside the picture and clear of every other text: right, left or centred,
+  // above or below, then a row further out; then all around it, further and further. Never on top of another text,
+  // unless there's truly no room (then the spot that covers least).
+  function spot(n, text, dashed) {
+    ctx.font = stickerFont();
+    const w = ctx.measureText(text).width + (small ? 30 : 36), h = small ? 26 : 30, gap = 6;
+    const inside = r => r.x >= area.x0 + 6 && r.x + r.w <= area.x1 - 6 && r.y >= area.y0 + 2 && r.y + r.h <= area.y1 - 2;
+    const others = [...blocked, ...tags.filter(g => !g.out && g.n !== n).map(rectOf), ...(hover.tag && hover.tag.n !== n ? [rectOf(hover.tag)] : [])];
+    const cost = r => others.reduce((s, o) => s + (overlap(r, o, gap) ? (Math.min(r.x + r.w, o.x + o.w) - Math.max(r.x, o.x) + gap) * (Math.min(r.y + r.h, o.y + o.h) - Math.max(r.y, o.y) + gap) : 0), 0);
+    const near = Math.max(14, n.root ? headR + 14 : 14);
+    const tries = [];
+    for (let m = 0; m < 4; m++) for (const dy of [-h - near + 2 - m * (h + 8), near - 2 + m * (h + 8)]) for (const dx of [near, -w - near, -w / 2]) tries.push([dx, dy]);
+    for (let ring = 1; ring <= 5; ring++) for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2, d = near + ring * 22; tries.push([Math.cos(a) * d - (Math.cos(a) < 0 ? w : 0), Math.sin(a) * d - h / 2]); }
+    let best = null, bestCost = Infinity;
+    for (const [dx, dy] of tries) {
+      const r = { x: n.x + dx, y: n.y + dy, w, h };
+      if (!inside(r)) continue;
+      const c = cost(r);
+      if (c === 0) return { dx, dy, w, h, dashed };
+      if (c < bestCost) { bestCost = c; best = { dx, dy, w, h, dashed }; }
+    }
+    return best ?? { dx: near, dy: -h - near, w, h, dashed };
+  }
+  const rectOf = g => ({ x: g.n.x + g.dx, y: g.n.y + g.dy, w: g.w, h: g.h });
+  function sticker(g, a) {
+    const { n } = g, x = n.x + g.dx, y = n.y + g.dy, w = g.w, h = g.h, s = a < 1 ? .6 + .4 * easeBack(a) : 1;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, a * 1.5);
+    const ex = Math.max(x + 10, Math.min(x + w - 10, n.x)), ey = n.y < y ? y : n.y > y + h ? y + h : y + h / 2;
+    ctx.setLineDash([2, 3]); ctx.strokeStyle = 'rgba(255, 255, 255, .8)'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(n.x, n.y); ctx.lineTo(ex, ey); ctx.stroke(); ctx.setLineDash([]);
+    ctx.translate(x + w / 2, y + h / 2); ctx.rotate(g.rot); ctx.scale(s, s);
+    box(-w / 2 + 2, -h / 2 + 4, w, h, 11); ctx.fillStyle = 'rgba(4, 18, 70, .3)'; ctx.fill();
+    box(-w / 2, -h / 2, w, h, 11); ctx.fillStyle = '#fff'; ctx.fill();
+    if (g.dashed) { ctx.setLineDash([4, 3]); ctx.strokeStyle = g.color; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); }
+    const dot = small ? 4 : 5;
+    ctx.beginPath(); ctx.arc(-w / 2 + dot + 9, 0, dot, 0, Math.PI * 2); ctx.fillStyle = g.color; ctx.fill(); ctx.strokeStyle = 'rgba(19, 32, 74, .35)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = stickerFont(); ctx.fillStyle = '#13204a'; ctx.textBaseline = 'middle'; ctx.fillText(g.text, -w / 2 + dot * 2 + 14, 1.5);
+    ctx.restore();
+  }
+  const box = (x, y, w, h, r) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); };
+  const addTag = (n, text, color, dashed = false) => { const g = { n, text, color, a: 0, rot: (Math.random() - .5) * .12 }; Object.assign(g, spot(n, text, dashed)); tags.push(g); return g; };
+
+  // ---- signals ----
+  const pulses = [], lit = new Map(), held = new Set(), flares = new Map();
+  let flashAt = -1e9, lastIdle = 0;
+  const flash = t => Math.max(0, 1 - (t - flashAt) / 800);
+  // along the branches, from one neuron to another (ids); resolves on arrival
+  const fire = (path, color, power = 1, speed = .34) => new Promise(done => {
+    const pts = path.map(i => T[i]), d = [0];
+    for (let k = 1; k < pts.length; k++) d.push(d[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+    pulses.push({ path, pts, d, k: 0, total: d[d.length - 1], t0: performance.now(), color, power, speed, done });
+  });
+  // from the card's question into the head, on a curve
+  const fireFrom = (from, color) => new Promise(done => {
+    const to = { x: root.x, y: root.y }, mid = { x: (from.x + to.x) / 2, y: Math.min(from.y, to.y) - 50 };
+    const pts = Array.from({ length: 25 }, (_, k) => { const s = k / 24, it = 1 - s; return { x: it * it * from.x + 2 * it * s * mid.x + s * s * to.x, y: it * it * from.y + 2 * it * s * mid.y + s * s * to.y }; });
+    const d = [0];
+    for (let k = 1; k < pts.length; k++) d.push(d[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+    pulses.push({ path: null, pts, d, k: 0, total: d[d.length - 1], t0: performance.now(), color, power: 1.2, speed: .5, done, trail: true });
+  });
+
+  // ---- each frame ----
+  let raf = 0, inView = false;
+  const hover = { want: null, at: 0, n: null, tag: null, a: 0 };
+  function frame(t) {
+    if (!inView) { raf = 0; return; }
+    raf = requestAnimationFrame(frame);
+    render(t);
+  }
+  function render(t) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(off, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineCap = 'round';
+    // signals move first, so what they passed lights up this frame
+    for (let k = pulses.length - 1; k >= 0; k--) {
+      const p = pulses[k], s = Math.min(p.total, (t - p.t0) * p.speed);
+      if (p.path) while (p.k < p.pts.length - 1 && p.d[p.k + 1] <= s) { p.k++; lit.set(p.path[p.k], Math.max(lit.get(p.path[p.k]) ?? 0, p.power)); }
+      if (s >= p.total) { pulses.splice(k, 1); p.done(); }
+    }
+    // what's lit: a few bands of brightness, each stroked once, warm white
+    if (lit.size) {
+      const bands = [[], [], [], []];
+      for (const [i, h] of lit) {
+        const n = T[i];
+        if (n.p >= 0) bands[Math.min(3, Math.floor(Math.min(1, h) * 4))].push(n);
+        const nh = held.has(i) ? h : h * .955;
+        if (nh < .03) lit.delete(i); else lit.set(i, nh);
+      }
+      ctx.save(); ctx.shadowBlur = 8;
+      bands.forEach((list, b) => {
+        if (!list.length) return;
+        const h = (b + 1) / 4;
+        ctx.shadowColor = ctx.strokeStyle = mix('#ffe9a8', '#ffffff', h); ctx.globalAlpha = .3 + .7 * h;
+        ctx.beginPath();
+        for (const n of list) { const P = T[n.p]; ctx.moveTo(P.x, P.y); ctx.lineTo(n.x, n.y); }
+        ctx.lineWidth = 1.6 + 1.2 * h; ctx.stroke();
+      });
+      ctx.restore();
+    }
+    // the memories: dots in their kind's colour; one that answered grows and wears a white ring
+    for (const p of puncta) {
+      const f = flares.get(p.n.i) ?? 0, tw = reduced ? 1 : .75 + .25 * Math.sin(t * .002 + p.tw);
+      ctx.globalAlpha = tw + (1 - tw) * f; ctx.fillStyle = KINDS[p.kind].color;
+      ctx.beginPath(); ctx.arc(p.n.x, p.n.y, (small ? 2 : 2.4) + f * 2.6, 0, Math.PI * 2); ctx.fill();
+      if (f > .05) { ctx.globalAlpha = f; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.6; ctx.stroke(); }
+      const nf = held.has(p.n.i) ? Math.min(1, f + .08) : f * .94;
+      if (nf < .02) flares.delete(p.n.i); else if (f) flares.set(p.n.i, nf);
+    }
+    ctx.globalAlpha = 1;
+    // signal heads: a bright dot with a short tail
+    for (const p of pulses) {
+      const s = Math.min(p.total, (t - p.t0) * p.speed);
+      const at = v => { let k = 0; while (k < p.d.length - 2 && p.d[k + 1] < v) k++; const f = (v - p.d[k]) / Math.max(1e-6, p.d[k + 1] - p.d[k]); return [p.pts[k].x + (p.pts[k + 1].x - p.pts[k].x) * f, p.pts[k].y + (p.pts[k + 1].y - p.pts[k].y) * f]; };
+      const [hx, hy] = at(s);
+      ctx.save(); ctx.strokeStyle = p.color; ctx.shadowBlur = 10; ctx.shadowColor = p.color;
+      if (p.trail) { ctx.globalAlpha = .55; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(p.pts[0].x, p.pts[0].y); for (let k = 1; k < p.pts.length && p.d[k] <= s; k++) ctx.lineTo(p.pts[k].x, p.pts[k].y); ctx.lineTo(hx, hy); ctx.stroke(); }
+      let px = hx, py = hy;
+      for (let j = 1; j <= 6; j++) { const [x2, y2] = at(Math.max(0, s - j * 5)); ctx.globalAlpha = Math.min(1, p.power) * (1 - j / 7); ctx.lineWidth = 2.8 - j * .32; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(x2, y2); ctx.stroke(); px = x2; py = y2; }
+      ctx.globalAlpha = Math.min(1, p.power + .2); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(hx, hy, 1.6 + 1.4 * Math.min(1, p.power), 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    drawHead(t);
+    // stickers last, so nothing is drawn over them
+    for (let k = tags.length - 1; k >= 0; k--) {
+      const g = tags[k]; g.a = Math.max(0, Math.min(1, g.a + (g.out ? -.06 : .06)));
+      if (g.out && !g.a) { tags.splice(k, 1); continue; }
+      sticker(g, g.a);
+    }
+    // the memory under the pointer, after a short pause
+    if (hover.want !== hover.n && t - hover.at > (hover.want ? 110 : 220)) {
+      hover.n = hover.want; hover.tag = null;
+      if (hover.n) { const p = puncta.find(x => x.n === hover.n); fire(pathTo(hover.n.i), '#ffffff', .8, .6).then(() => flares.set(p.n.i, 1)); }
+    }
+    hover.a += ((hover.n ? 1 : 0) - hover.a) * (reduced ? 1 : .15);
+    if (hover.n && !tags.some(g => g.n === hover.n && !g.out)) {
+      const p = puncta.find(x => x.n === hover.n);
+      hover.tag ??= Object.assign({ n: hover.n, text: p.label, color: KINDS[p.kind].color, rot: -.03 }, spot(hover.n, p.label));
+      sticker(hover.tag, hover.a);
+    }
+    if (!reduced && t - lastIdle > 650 && pulses.length < 5) {
+      // the mind is never quite still: a faint thought now and then
+      lastIdle = t;
+      const p = any(puncta);
+      if (p) fire(pathTo(p.n.i), '#ffffff', .3, .24);
+    }
+  }
+  // The head: her face as a round sticker with a white edge, her halo floating above, glowing when a question lands
+  function drawHead(t) {
+    const f = flash(t), bob = reduced ? 0 : Math.sin(t * .0022) * 1.3, r = headR * (1 + .05 * f), x = root.x, y = root.y + bob, edge = small ? 3.5 : 4.5;
+    ctx.save();
+    ctx.shadowColor = f > .05 ? `rgba(255, 214, 110, ${.9 * f})` : 'rgba(4, 14, 50, .55)'; ctx.shadowBlur = 16 + 18 * f; ctx.shadowOffsetY = f > .05 ? 0 : 5;
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, r + edge, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const img = faces[faceKey];
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = '#f3ead8'; ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+    if (img.complete && img.naturalWidth) ctx.drawImage(img, x - r, y - r, 2 * r, 2 * r);
+    ctx.restore();
+    ctx.save(); ctx.translate(x - r * .12, y - r - edge - (small ? 6 : 8) + bob * .4); ctx.rotate(-.22);
+    ctx.strokeStyle = '#f2c75c'; ctx.lineWidth = small ? 2.4 : 3; ctx.shadowColor = 'rgba(242, 199, 92, .6)'; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * .55, r * .17, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ---- pointer: point at a memory and a signal runs out to it, with its name ----
+  const local = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const pickAt = (x, y, touch) => {
+    const keep = touch ? 30 : 22;
+    if (hover.n && (hover.n.x - x) ** 2 + (hover.n.y - y) ** 2 < keep * keep) return hover.n;
+    let best = null, bd = (touch ? 24 : 16) ** 2;
+    for (const p of puncta) { const d = (p.n.x - x) ** 2 + (p.n.y - y) ** 2; if (d < bd) { bd = d; best = p.n; } }
+    return best;
+  };
+  const aim = n => { if (n !== hover.want) { hover.want = n; hover.at = performance.now(); } };
+  canvas.addEventListener('pointermove', e => { const [x, y] = local(e); aim(pickAt(x, y, e.pointerType === 'touch')); canvas.style.cursor = hover.want && e.pointerType !== 'touch' ? 'pointer' : ''; });
+  canvas.addEventListener('pointerdown', e => { const [x, y] = local(e); aim(pickAt(x, y, e.pointerType === 'touch')); });
+  canvas.addEventListener('pointerleave', () => aim(null));
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ---- the questions it gets asked ----
+  const SCENES = [
+    { q: 'what do you remember about summer?', face: 'laugh', a: 'the pool at night. orange popsicles. grandma humming on the balcony. why, do you miss it too?',
+      find: [['memory', 'the pool at night'], ['memory', 'orange popsicles'], ['place', "grandma's balcony"], ['memory', 'humming that one song'], ['feeling', 'missing someone']] },
+    { q: 'who do you actually trust?', face: 'wink', a: "my brother. and you, a little. don't make it weird.",
+      find: [['person', 'her older brother'], ['person', 'you'], ['feeling', 'trust, fragile'], ['memory', 'the broken promise']] },
+    { q: 'what scares you?', face: 'think', a: 'being forgotten. deep water is a close second.',
+      find: [['feeling', 'being forgotten'], ['feeling', 'deep water'], ['memory', 'the hallway light at 3am'], ['feeling', 'restless']] },
+    { q: 'so... do you know my secret?', face: 'wow', a: 'what secret? you never told me anything. ...should you?', blocked: true },
+  ];
+  const $ = s => panel.querySelector(s);
+  const qEl = $('.q'), aEl = $('.a'), aBox = $('.bubble-a'), list = $('.recall'), status = $('.status'), face = $('.face');
+  const setFace = f => { faceKey = f; face.src = faces[f].src; };
+  const type = async (el, text, ms) => { el.textContent = ''; el.classList.add('typing'); for (const ch of text) { el.textContent += ch; await sleep(ms); } el.classList.remove('typing'); };
+
+  function found(p, label) {
+    held.add(p.n.i); flares.set(p.n.i, 1);
+    addTag(p.n, label, KINDS[p.kind].color);
+    const li = document.createElement('li');
+    li.innerHTML = `<i style="--c:${KINDS[p.kind].color}"></i><span>${label}</span><small>${p.kind}</small>`;
+    list.append(li); requestAnimationFrame(() => requestAnimationFrame(() => li.classList.add('on')));
+  }
+  // what answers: one memory of each kind asked for, each on a different main branch where it can be
+  async function recall(scene) {
+    status.textContent = '✦ following the branches…';
+    const used = new Set(), branchOf = n => { let j = n.i; while (T[j].p > 0) j = T[j].p; return j; };
+    const picks = scene.find.map(([kind, label]) => {
+      let pool = puncta.filter(p => p.kind === kind && !used.has(p) && ![...used].some(u => branchOf(u.n) === branchOf(p.n)));
+      if (!pool.length) pool = puncta.filter(p => p.kind === kind && !used.has(p));
+      const p = any(pool);
+      if (p) used.add(p);
+      return p && { p, label };
+    }).filter(Boolean);
+    await Promise.all(picks.map((x, j) => sleep(j * 220).then(() => {
+      const path = pathTo(x.p.n.i);
+      for (const id of path) held.add(id);
+      return fire(path, GOLD, 1, .36);
+    }).then(() => found(x.p, x.label))));
+    return picks.length;
+  }
+  // a secret she was never told: the signal searches the secrets' branches and comes back empty
+  async function search() {
+    status.textContent = '✦ looking through every memory…';
+    const secrets = puncta.filter(p => p.kind === 'secret').sort(() => Math.random() - .5).slice(0, 6);
+    await Promise.all(secrets.map((p, j) => sleep(j * 140).then(() => fire(pathTo(p.n.i), '#c9d6ff', .5, .38))));
+    await sleep(250);
+    addTag(root, 'not in this mind', '#ff8fb0', true);
+    status.innerHTML = '✦ <b>nothing found</b> · she was never told';
+  }
+  async function play(scene) {
+    panel.classList.add('clearing');
+    for (const g of tags) g.out = true;
+    held.clear();
+    await sleep(450);
+    list.textContent = ''; aEl.textContent = ''; qEl.textContent = ''; status.textContent = '';
+    aBox.classList.remove('on'); setFace('think');
+    panel.classList.remove('clearing');
+    await sleep(350);
+    await type(qEl, scene.q, 36);
+    await sleep(380);
+    status.textContent = '✦ asking her mind…';
+    const c = canvas.getBoundingClientRect(), qb = $('.bubble-q').getBoundingClientRect();
+    const from = wide ? { x: qb.right - c.left + 6, y: qb.top + qb.height / 2 - c.top } : { x: W / 2, y: -8 };
+    await fireFrom(from, GOLD);
+    flashAt = performance.now();
+    if (scene.blocked) { setFace('wow'); await search(); }
+    else {
+      const count = await recall(scene);
+      await sleep(420);
+      status.textContent = `✦ ${count} things came to mind · handed to your model`;
+    }
+    await sleep(800);
+    setFace(scene.face);
+    aBox.classList.add('on');
+    await type(aEl, scene.a, 27);
+    await sleep(3600);
+  }
+
+  // ---- run only while it's on screen ----
+  let wake = null;
+  const visible = () => (inView ? Promise.resolve() : new Promise(r => { wake = r; }));
+  new IntersectionObserver(([e]) => {
+    inView = e.isIntersecting;
+    if (inView && !raf) raf = requestAnimationFrame(frame);
+    if (inView && wake) { wake(); wake = null; }
+  }, { rootMargin: '80px' }).observe(stage);
+  let resizing = 0;
+  addEventListener('resize', () => { cancelAnimationFrame(resizing); resizing = requestAnimationFrame(fit); });
+  fit();
+  document.fonts?.ready.then(fit);
+
+  if (reduced) {
+    // no motion: the first answer stays lit
+    visible().then(() => requestAnimationFrame(() => {
+      const scene = SCENES[0], used = new Set();
+      for (const [kind, label] of scene.find.slice(0, 3)) {
+        const p = puncta.find(x => x.kind === kind && !used.has(x));
+        if (!p) continue;
+        used.add(p);
+        for (const id of pathTo(p.n.i)) { held.add(id); lit.set(id, 1); }
+        held.add(p.n.i); flares.set(p.n.i, 1);
+        Object.assign(addTag(p.n, label, KINDS[p.kind].color), { a: 1 });
+      }
+      render(performance.now());
+    }));
+    return;
+  }
+  (async () => {
+    await visible();
+    await sleep(900);
+    for (let i = 0; ; i++) { await visible(); await play(SCENES[i % SCENES.length]); }
+  })();
+};
+
+// Build the brain once the page has settled, or as soon as it's about to be seen, whichever comes first
+(() => {
+  let booted = false;
+  const go = () => { if (!booted) { booted = true; bootBrain(); } };
+  new IntersectionObserver(([e], o) => { if (e.isIntersecting) { o.disconnect(); go(); } }, { rootMargin: '700px' }).observe(document.querySelector('.stage'));
+  addEventListener('load', () => window.requestIdleCallback ? requestIdleCallback(go, { timeout: 2500 }) : setTimeout(go, 500));
+})();
+</script>
+<!--/email_off-->
+</body>
+</html>

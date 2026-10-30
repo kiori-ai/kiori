@@ -1,0 +1,52 @@
+{
+  "name": "kiori",
+  "version": "2.0.0",
+  "description": "The JavaScript client for Kiori, brains for characters: memory, personality and who-knows-what for character AI. No dependencies; Node 18+ and browsers.",
+  "keywords": [
+    "kiori",
+    "character-ai",
+    "ai-characters",
+    "memory",
+    "llm-memory",
+    "long-term-memory",
+    "personality",
+    "roleplay",
+    "npc",
+    "chatbot",
+    "llm",
+    "sillytavern",
+    "character-card"
+  ],
+  "homepage": "https://kiori.io/docs",
+  "bugs": {
+    "url": "https://github.com/kiori-ai/kiori/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kiori-ai/kiori.git",
+    "directory": "sdk"
+  },
+  "license": "MIT",
+  "author": "Kiori (https://kiori.io)",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./kiori.d.ts",
+      "default": "./kiori.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./kiori.mjs",
+  "types": "./kiori.d.ts",
+  "files": [
+    "kiori.mjs",
+    "kiori.d.ts"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

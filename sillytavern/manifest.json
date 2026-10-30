@@ -1,0 +1,12 @@
+{
+    "display_name": "Kiori",
+    "loading_order": 90,
+    "requires": [],
+    "optional": [],
+    "generate_interceptor": "kioriInterceptor",
+    "js": "index.js",
+    "css": "style.css",
+    "author": "Kiori",
+    "version": "1.0.0",
+    "homePage": "https://kiori.io"
+}

@@ -1,0 +1,19 @@
+# Cloudflare Tunnel config for the server. Copy it to /etc/cloudflared/config.yml and replace both <TUNNEL_ID>s.
+#
+# A Cloudflare named tunnel for your hostname (moving Kiori, the tunnel it already runs: DNS then stays as it is, and
+# only the machine running the tunnel changes). Its credentials JSON is copied here by hand, as
+# /etc/cloudflared/<TUNNEL_ID>.json. Route any other hostnames of yours below in the same way.
+#
+# Check it without connecting:  cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
+
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+
+# A status page on this server only: curl -s http://127.0.0.1:20241/ready
+metrics: 127.0.0.1:20241
+
+ingress:
+  - hostname: api.example.com
+    service: http://127.0.0.1:7700
+  # Anything else that reaches this tunnel
+  - service: http_status:404

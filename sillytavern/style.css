@@ -1,0 +1,5 @@
+.kiori-settings label { display: block; margin-top: 8px; }
+.kiori-settings .checkbox_label { display: flex; margin-top: 4px; }
+.kiori-status { margin: 10px 0 6px; padding: 8px 10px; border-radius: 6px; background: var(--black30a, rgba(0, 0, 0, .2)); font-size: .9em; line-height: 1.5; }
+.kiori-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.kiori-note { display: block; margin-top: 8px; opacity: .7; }

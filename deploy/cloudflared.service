@@ -1,0 +1,58 @@
+# Cloudflare Tunnel on the server: brings your hostname to Kiori on 127.0.0.1:7700. It only dials out, so the
+# server needs no open port for it. Installed by setup.sh as /etc/systemd/system/cloudflared.service.
+#
+# Started once Kiori runs here with its data, not before: while it runs, Cloudflare sends the hostname's traffic here.
+# Reads /etc/cloudflared/config.yml (made from config.example.yml) and the tunnel credentials JSON named in it.
+# (The other way is `cloudflared service install`. Use one or the other, not both.)
+#
+#   systemctl status cloudflared        journalctl -u cloudflared -f
+
+[Unit]
+Description=Cloudflare Tunnel for Kiori
+Documentation=https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+# After Kiori at boot, so the tunnel doesn't come up in front of nothing
+After=network-online.target kiori.service
+Wants=network-online.target
+
+[Service]
+# cloudflared tells systemd once the tunnel is connected: `systemctl start cloudflared` returns when traffic can flow
+Type=notify
+TimeoutStartSec=90
+User=cloudflared
+Group=cloudflared
+# A bare name: systemd finds the binary wherever the apt package put it (/usr/bin or /usr/local/bin)
+ExecStart=cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cloudflared
+
+# Hardening. cloudflared reads its config and credentials and dials out; it writes nothing.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

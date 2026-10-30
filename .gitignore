@@ -1,0 +1,8 @@
+data/local/
+.env
+node_modules/
+.DS_Store
+*.log
+# the static site (kiori site)
+dist/
+__pycache__/

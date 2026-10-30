@@ -1,0 +1,56 @@
+# Kiori's Python client on PyPI. The distribution is "kiori-ai" (the name "kiori" on PyPI belongs to an unrelated
+# project); the module stays kiori.py, so it's `pip install kiori-ai`, then `from kiori import Kiori`.
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kiori-ai"
+version = "2.0.0"
+description = "The Python client for Kiori, brains for characters: memory, personality and who-knows-what for character AI. No dependencies."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Kiori" }]
+keywords = [
+    "kiori",
+    "character ai",
+    "ai characters",
+    "memory",
+    "llm memory",
+    "long-term memory",
+    "personality",
+    "roleplay",
+    "npc",
+    "chatbot",
+    "llm",
+    "sillytavern",
+    "character card",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Games/Entertainment :: Role-Playing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://kiori.io"
+Documentation = "https://kiori.io/docs"
+Source = "https://github.com/kiori-ai/kiori/tree/main/sdk"
+Issues = "https://github.com/kiori-ai/kiori/issues"
+
+# One module, kiori.py. The JavaScript files next to it belong to the npm package and stay out of the wheel and the
+# sdist (the sdist also always carries pyproject.toml, the readme and the license).
+[tool.hatch.build.targets.wheel]
+only-include = ["kiori.py"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["kiori.py"]

@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kiori console</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/site/img/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/site/img/favicon-16.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/site/img/favicon-192.png">
+<link rel="apple-touch-icon" href="/site/img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+/* The Kiori console: a customer's keys and how to connect, nothing else (Kiori stores no brains). Colors and type follow kiori.io. */
+:root {
+  --paper: #f6f1e6; --card: #fff; --line: #e4dccb; --line-2: #d6cbb5;
+  --ink: #13204a; --ink-2: #4b5781; --ink-3: #8b93ae;
+  --cobalt: #1d55c4; --cobalt-2: #e8eefb; --on-cobalt: #fff;
+  --gold: #f2c75c; --gold-2: #fdf3d4; --gold-ink: #94650a;
+  --ok: #23845a; --ok-2: #e2f3ea; --warn: #a86a0c; --bad: #c8402c;
+  --code: #0f1a3d; --shadow: 0 1px 2px rgba(19, 32, 74, .05);
+  --serif: 'Instrument Serif', Georgia, serif; --sans: 'DM Sans', system-ui, sans-serif; --mono: 'DM Mono', ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0e1430; --card: #141c3d; --line: #242e58; --line-2: #34407a;
+    --ink: #eef1fb; --ink-2: #b4bddd; --ink-3: #7d87ae;
+    --cobalt: #86aaff; --cobalt-2: #1c2b5e; --on-cobalt: #0e1430;
+    --gold-2: #332a12; --gold-ink: #f2c75c; --ok: #5fcf95; --ok-2: #13301f; --warn: #f0b552; --bad: #ff8a78;
+    --code: #0a1030; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+a { color: var(--cobalt); text-decoration: none; cursor: pointer; }
+button { font: inherit; color: inherit; }
+img { -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; pointer-events: none; }
+.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+header { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 16px; height: 60px; padding: 0 28px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.logo { position: relative; display: inline-flex; align-items: baseline; gap: 9px; color: var(--ink); font: italic 400 26px/1 var(--serif); letter-spacing: -.01em; }
+.logo .halo { position: absolute; left: 1px; top: -6px; width: 16px; height: 6px; border: 1.6px solid var(--gold); border-radius: 50%; transform: rotate(-14deg); }
+.logo small { font: 400 10px/1 var(--mono); font-style: normal; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.proj { padding-left: 16px; border-left: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+.proj b { color: var(--ink); font-weight: 500; }
+.proj select { width: auto; height: 30px; margin-left: 4px; padding: 0 8px; font-size: 12.5px; }
+.sp { flex: 1; }
+header nav { display: flex; gap: 18px; font-size: 13px; }
+header nav a { color: var(--ink-2); }
+
+main { max-width: 900px; margin: 0 auto; padding: 44px 24px 120px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 24px; align-items: end; margin-bottom: 26px; }
+.hero img { width: 122px; justify-self: end; margin-bottom: -14px; transform: rotate(5deg); filter: drop-shadow(0 8px 14px rgba(19, 32, 74, .14)); }
+h1 { margin: 0 0 8px; font: 400 44px/1.05 var(--serif); letter-spacing: -.015em; }
+h1 em { color: var(--cobalt); }
+.lede { margin: 0; max-width: 580px; color: var(--ink-2); font-size: 15.5px; }
+
+.flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 12px; }
+.st { position: relative; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: var(--shadow); }
+.st + .st::before { content: '→'; position: absolute; top: 50%; left: -7px; transform: translate(-50%, -50%); color: var(--ink-3); font-size: 13px; }
+.st .n { font: 400 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.st b { display: block; margin: 7px 0 3px; font-size: 15px; font-weight: 500; }
+.st p { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.st code { display: inline-block; margin-top: 9px; font: 400 11.5px var(--mono); color: var(--ink-3); }
+.st .alt { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-3); }
+.keeps { display: flex; align-items: center; gap: 8px; margin: 0 0 30px; font-size: 13px; color: var(--ink-2); }
+.keeps .ic { color: var(--ok); }
+
+.card { margin-bottom: 16px; padding: 20px 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow); }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+h2 { display: flex; align-items: center; gap: 10px; margin: 0; font: 500 16px/1.3 var(--sans); }
+.num { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 50%; background: var(--cobalt); color: var(--on-cobalt); font: 500 12px/1 var(--mono); }
+.desc { margin: 0 0 16px 34px; font-size: 13px; color: var(--ink-2); }
+.muted { color: var(--ink-3); } .small { font-size: 12.5px; } .mono { font-family: var(--mono); }
+.in { margin-left: 34px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 32px; padding: 0 13px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--card); color: var(--ink); font-size: 13px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.btn:hover { border-color: var(--ink-3); }
+.btn:disabled { opacity: .6; cursor: default; }
+.btn.pri { border-color: var(--cobalt); background: var(--cobalt); color: var(--on-cobalt); }
+.btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
+.btn.quiet { border-color: transparent; background: none; color: var(--ink-2); }
+.btn.danger { color: var(--bad); }
+.tag { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 6px; font: 500 11.5px/1.7 var(--mono); white-space: nowrap; }
+.t-blue { background: var(--cobalt-2); color: var(--cobalt); } .t-ok { background: var(--ok-2); color: var(--ok); } .t-gray { background: var(--paper); color: var(--ink-2); box-shadow: inset 0 0 0 1px var(--line); }
+.seg { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--paper); }
+.seg button { padding: 4px 11px; border: 0; border-radius: 7px; background: none; color: var(--ink-3); font-size: 12.5px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.seg button.on { background: var(--card); color: var(--ink); box-shadow: var(--shadow), 0 0 0 1px var(--line); }
+
+.tbl { margin: 0 -6px; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { padding: 6px 10px 10px; border-bottom: 1px solid var(--line); text-align: left; font: 400 10px/1.2 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap; }
+td { padding: 11px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.wrap { white-space: normal; }
+tbody tr:last-child td { border-bottom: 0; }
+td.r, th.r { text-align: right; }
+.newkey { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: var(--gold-2); color: var(--gold-ink); font-size: 12.5px; }
+.newkey code { padding: 4px 9px; border-radius: 6px; background: var(--card); color: var(--ink); font: 500 12.5px var(--mono); word-break: break-all; }
+
+input, select { width: 100%; height: 40px; padding: 0 11px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--card); color: var(--ink); font: 13.5px var(--sans); }
+.mono-in { font-family: var(--mono); font-size: 12.5px; }
+input:focus, select:focus { border-color: var(--cobalt); outline: 3px solid color-mix(in srgb, var(--cobalt) 25%, transparent); }
+.keybox { max-width: 560px; }
+.keyline { display: flex; gap: 10px; }
+.keyline input { flex: 1; min-width: 0; }
+.keyline .btn { height: 40px; }
+.detect { display: flex; align-items: center; gap: 7px; margin-top: 10px; font-size: 12.5px; color: var(--ink-3); }
+.detect.ok { color: var(--ok); } .detect.warn { color: var(--warn); } .detect.bad { color: var(--bad); }
+.detect:not(.ok) .ic { display: none; }
+.model { display: grid; gap: 6px; margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
+.model label { font-size: 12.5px; font-weight: 500; color: var(--ink-2); }
+.hint { font-size: 12px; color: var(--ink-3); }
+.hint.ind { margin: 12px 0 0 34px; }
+
+.connect-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; }
+.steps li { position: relative; padding: 0 0 18px 40px; counter-increment: s; }
+.steps li:last-child { padding-bottom: 0; }
+.steps li::before { content: counter(s); position: absolute; left: 4px; top: 0; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--paper); box-shadow: inset 0 0 0 1px var(--line-2); color: var(--ink-2); font: 500 12px/1 var(--mono); }
+.steps b { display: block; font-weight: 500; }
+.steps p { margin: 2px 0 0; font-size: 13px; color: var(--ink-2); }
+.copyline { display: flex; align-items: center; gap: 8px; max-width: 520px; margin-top: 8px; padding: 6px 6px 6px 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--paper); font: 12.5px var(--mono); }
+.copyline .url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+pre { margin: 0; padding: 16px 18px; overflow-x: auto; border-radius: 10px; background: var(--code); color: #dfe5f5; font: 400 12.5px/1.7 var(--mono); }
+pre .k { color: #f2c75c; } pre .s { color: #9fe0b5; } pre .c { color: #7f8bb3; }
+.usage { margin: 22px 0 0; font-size: 12.5px; color: var(--ink-3); text-align: center; }
+
+.login { max-width: 440px; margin: 9vh auto 0; }
+.login .card { padding: 26px; }
+.login h1 { font-size: 38px; }
+.login p { color: var(--ink-2); }
+.login form { display: grid; gap: 10px; margin-top: 16px; }
+.toast { position: fixed; left: 50%; bottom: 24px; z-index: 9; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 10px; background: var(--ink); color: var(--paper); font-size: 13px; box-shadow: 0 10px 30px rgba(19, 32, 74, .28); }
+
+@media (max-width: 760px) {
+  header { padding: 0 16px; gap: 12px; }
+  .proj, header nav a.wide { display: none; }
+  main { padding: 28px 16px 110px; }
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .hero img { display: none; }
+  h1 { font-size: 36px; }
+  .flow { grid-template-columns: minmax(0, 1fr); }
+  .st + .st::before { content: '↓'; top: -7px; left: 50%; }
+  .desc, .in, .hint.ind { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 4.2 2.9 7.7 7 9 4.1-1.3 7-4.8 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+</svg>
+<header>
+  <a class="logo" href="/console"><span class="halo"></span>kiori<small>console</small></a>
+  <span class="proj" id="proj" hidden></span>
+  <span class="sp"></span>
+  <nav id="nav"></nav>
+</header>
+<main id="app"></main>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const h = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem('psyche.' + k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('psyche.' + k, JSON.stringify(v)); } catch {} },
+};
+// The admin key is kept only while this tab is open
+const session = {
+  get(k) { try { return sessionStorage.getItem('kiori.' + k); } catch { return null; } },
+  set(k, v) { try { v == null ? sessionStorage.removeItem('kiori.' + k) : sessionStorage.setItem('kiori.' + k, v); } catch {} },
+};
+try { localStorage.removeItem('psyche.admin'); } catch {}
+// The keys this browser signed in with (several projects can be kept), which of them a sign-in link made (signing out
+// revokes those), and the admin key of this Kiori, if any
+let keys = [...new Set(store.get('keys', []).filter(k => /^(kio|psy)_/.test(k)))], current = Math.min(store.get('current', 0), Math.max(0, keys.length - 1));
+let fromLinks = store.get('linked', []);
+// Each kept key's project name, so the picker says which project each one is
+const names = store.get('names', {});
+let adminKey = session.get('admin');
+const setAdmin = k => { adminKey = k; session.set('admin', k); };
+const keep = key => { if (!keys.includes(key)) keys.push(key); current = keys.indexOf(key); store.set('keys', keys); store.set('current', current); };
+const forget = i => { const k = keys[i]; keys.splice(i, 1); current = 0; fromLinks = fromLinks.filter(p => p !== k?.slice(0, 10)); delete names[k?.slice(0, 10)]; store.set('keys', keys); store.set('current', 0); store.set('linked', fromLinks); store.set('names', names); };
+// A sign-in link (#signin=kis_...) holds a one-time token: it leaves the address bar at once, and is traded for a key
+// of this browser's own only when the person says so, so a mail scanner opening the link can't spend it, and another
+// site sending this tab here can't switch it to a project of theirs. Links that held a key (#key=kio_..., from before)
+// don't sign in any more: anyone could make one for their own project. Read on every render, so a link pasted into a
+// console that's already open works too. Returns the token, if there is one.
+function takeLink() {
+  const signin = location.hash.match(/signin=(kis_[\w-]+)/)?.[1];
+  const linked = /key=(?:kio|psy)_/.test(location.hash);
+  if (signin || linked) history.replaceState(null, '', location.pathname);
+  if (linked) toast('Links with a key in them no longer sign in: paste the key below, or ask for a new sign-in link.', 6000);
+  return signin;
+}
+const auth = () => keys[current];
+function toast(msg, ms = 3400) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), ms); }
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: { Authorization: 'Bearer ' + auth(), ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw Object.assign(new Error(data?.error?.message ?? 'HTTP ' + res.status), { status: res.status, code: data?.error?.code });
+  return data;
+}
+async function adminApi(method, path, body) {
+  const res = await fetch(path, { method, headers: { 'X-Admin-Key': adminKey ?? '', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => null);
+  if (res.status === 401) { setAdmin(null); throw new Error('The admin key was not accepted.'); }
+  if (!res.ok) throw new Error(data?.error?.message ?? 'HTTP ' + res.status);
+  return data;
+}
+const copy = async (text, btn) => { try { await navigator.clipboard.writeText(text); if (btn) { const t = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = t), 1400); } } catch { toast('Copy it by hand: the browser said no.'); } };
+const when = iso => (iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '');
+const ago = iso => { if (!iso) return 'never'; const s = (Date.now() - Date.parse(iso)) / 1000; return s < 90 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} days ago`; };
+// The provider a brain API key is from, read the way the server reads it, for instant feedback while pasting
+const PROVIDERS = [[/^sk-or-/, 'OpenRouter'], [/^sk-ant-/, null, "Anthropic keys can't be used directly yet. An OpenRouter key reaches Claude too."], [/^AIza/, 'Gemini'], [/^sk-/, 'OpenAI']];
+const providerOf = k => PROVIDERS.find(([re]) => re.test(k));
+
+function nav(project) {
+  const items = [];
+  if (keys.length > 1 && project) {
+    $('#proj').innerHTML = `<b>${h(project.name)}</b> · <select id="pick" aria-label="Project">${keys.map((k, i) => `<option value="${i}" ${i === current ? 'selected' : ''}>${names[k.slice(0, 10)] ? `${h(names[k.slice(0, 10)])} · ` : ''}${h(k.slice(0, 10))}…</option>`).join('')}</select>`;
+    $('#pick').onchange = e => { current = Number(e.target.value); store.set('current', current); render(); };
+  } else $('#proj').innerHTML = project ? `<b>${h(project.name)}</b> · ${h(project.id)}` : '';
+  $('#proj').hidden = !project;
+  items.push('<a class="wide" href="/docs/integration" target="_blank" rel="noopener">Docs ↗</a>', '<a class="wide" href="/docs/api" target="_blank" rel="noopener">API reference ↗</a>');
+  if (adminKey) items.push(location.hash === '#admin' ? '<a href="#">Your project</a>' : '<a href="#admin">Admin</a>');
+  if (auth() || adminKey) items.push('<a id="out">Sign out</a>');
+  $('#nav').innerHTML = items.join('');
+  $('#out')?.addEventListener('click', async () => {
+    if (location.hash === '#admin' || !auth()) setAdmin(null);
+    else {
+      // A key a sign-in link made for this browser ends with the sign-out; a key pasted in stays valid
+      const k = auth();
+      if (fromLinks.includes(k.slice(0, 10))) await api('DELETE', `/v1/project/keys/${encodeURIComponent(k.slice(0, 10))}`).catch(() => toast(`Signed out, but this browser's key (${k.slice(0, 10)}…) couldn't be revoked: revoke it in the keys list next time.`, 6000));
+      forget(current);
+    }
+    location.hash = ''; render();
+  });
+}
+
+function renderLogin() {
+  nav(null);
+  $('#app').innerHTML = `<div class="login"><div class="card">
+    <h1>Kiori <em>console</em></h1>
+    <p>Sign in with the link you were sent, or paste your Kiori key.</p>
+    <form id="login"><input class="mono-in" id="key" placeholder="kio_..." autocomplete="off" aria-label="Kiori key"><button class="btn pri">Sign in</button></form>
+    <p class="small muted" style="margin-top:16px">No key yet? <a href="https://kiori.io/#access">Ask for access</a>.</p>
+    <details class="small muted"><summary>Running this Kiori?</summary><form id="admin"><input class="mono-in" id="adminkey" placeholder="kia_... (data/local/admin.key)" autocomplete="off" aria-label="Admin key"><button class="btn">Sign in as admin</button></form></details>
+  </div></div>`;
+  // The key is checked before it's kept, once at a time; only a 401 means the key itself is wrong
+  $('#login').onsubmit = async e => {
+    e.preventDefault();
+    const k = $('#key').value.trim(), button = $('#login button');
+    if (!/^(kio|psy)_/.test(k)) return toast('A Kiori key starts with kio_.');
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      const res = await fetch('/v1/project', { headers: { Authorization: 'Bearer ' + k } }).catch(() => null);
+      if (!res) throw new Error("Can't reach Kiori: check your connection and try again.");
+      if (res.status === 401) throw new Error('That key was not accepted.');
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error?.message ?? `Kiori answered ${res.status}: try again in a moment.`);
+      keep(k);
+      render();
+    } catch (err) { button.disabled = false; toast(err.message); }
+  };
+  $('#admin').onsubmit = async e => {
+    e.preventDefault();
+    setAdmin($('#adminkey').value.trim());
+    try { await adminApi('GET', '/v1/admin/access'); location.hash = '#admin'; render(); }
+    catch (err) { setAdmin(null); toast(err.message); }
+  };
+}
+
+// A sign-in link waits for a click, and warns when this browser is in a project already
+function renderSignin(token) {
+  nav(null);
+  $('#app').innerHTML = `<div class="login"><div class="card">
+    <h1>Kiori <em>console</em></h1>
+    <p>This link signs this browser in to a Kiori project. It works once.</p>
+    ${keys.length ? '<p class="small muted">This browser is signed in to a project already. Go on only if you asked for this link: a link from someone else would put you in their project, where a key you paste or make is theirs to use.</p>' : ''}
+    <form id="signin"><button class="btn pri">Sign in</button> <button class="btn" type="button" id="notnow">Not now</button></form>
+  </div></div>`;
+  $('#signin').onsubmit = e => { e.preventDefault(); redeem(token); };
+  $('#notnow').onclick = () => render();
+}
+
+// Trading a sign-in link's token for this browser's own key
+async function redeem(token) {
+  $('#app').innerHTML = '<p class="muted">Signing you in…</p>';
+  try {
+    const res = await fetch('/v1/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(data?.error?.message ?? 'HTTP ' + res.status);
+    keep(data.key);
+    fromLinks = [...new Set([...fromLinks, data.key.slice(0, 10)])]; store.set('linked', fromLinks);
+    toast(`Signed in to ${data.project?.name ?? 'your project'}.`);
+  } catch (e) { toast(e.message, 6000); }
+  render();
+}
+
+const SNIPPETS = {
+  js: `<span class="k">import</span> { Kiori } <span class="k">from</span> <span class="s">'./kiori.mjs'</span>;   <span class="c">// ${location.origin}/sdk/kiori.mjs</span>
+<span class="k">const</span> kiori = <span class="k">new</span> Kiori({ apiKey: process.env.KIORI_API_KEY });
+
+<span class="c">// 1. Once per character: a brain from its card. Keep it anywhere.</span>
+<span class="k">let</span> brain = <span class="k">await</span> kiori.create({ character_card: card });
+
+<span class="c">// 2. Every turn: what the character knows right now</span>
+<span class="k">const</span> { text } = <span class="k">await</span> kiori.recall({ brain, messages });
+<span class="k">const</span> reply = <span class="k">await</span> yourModel.chat({ system: prompt + text, messages });
+
+<span class="c">// 3. After the reply: the brain learns. Keep the new one.</span>
+({ brain } = <span class="k">await</span> kiori.organize({ brain, messages }));
+<span class="k">await</span> db.save(chat.id, brain);`,
+  py: `<span class="k">from</span> kiori <span class="k">import</span> Kiori   <span class="c"># ${location.origin}/sdk/kiori.py</span>
+kiori = Kiori(os.environ[<span class="s">"KIORI_API_KEY"</span>])
+
+<span class="c"># 1. Once per character: a brain from its card. Keep it anywhere.</span>
+brain = kiori.create(character_card=card)
+
+<span class="c"># 2. Every turn: what the character knows right now</span>
+text = kiori.recall(brain=brain, messages=messages)[<span class="s">"text"</span>]
+reply = your_model.chat(system=prompt + text, messages=messages)
+
+<span class="c"># 3. After the reply: the brain learns. Keep the new one.</span>
+brain = kiori.organize(brain=brain, messages=messages)[<span class="s">"brain"</span>]
+db.save(chat_id, brain)`,
+};
+
+async function renderProject() {
+  let project;
+  try { project = await api('GET', '/v1/project'); }
+  catch (e) {
+    if (e.status === 401) { toast('That key was not accepted any more.'); forget(current); return render(); }
+    $('#app').innerHTML = `<p class="muted">Couldn't load the project: ${h(e.message)}</p>`; return;
+  }
+  names[auth().slice(0, 10)] = project.name; store.set('names', names);
+  nav(project);
+  const own = project.llm_mode === 'own';
+  $('#app').innerHTML = `
+  <div class="hero">
+    <div><h1>Plug Kiori in, <em>anywhere.</em></h1><p class="lede">Two keys and you're set: your Kiori key, and your brain API key. Kiori keeps no brains and no chats: every brain lives with you.</p></div>
+    <img src="/site/img/mascot-shh.webp" alt="Kiori with a finger on her lips, winking">
+  </div>
+  <div class="flow">
+    <div class="st"><span class="n">1 · Create</span><b>Card in, brain out</b><p>Send a character card. Kiori builds its brain and hands it back.</p><code>POST /v1/brains</code></div>
+    <div class="st"><span class="n">2 · Recall</span><b>Brain in, memory out</b><p>Send the brain and the latest messages. Get what the character knows right now, for your prompt.</p><code>POST /v1/brains/recall</code><span class="alt">or let Kiori write the reply: /v1/chat/completions</span></div>
+    <div class="st"><span class="n">3 · Organize</span><b>Brain in, better brain out</b><p>After the reply, send the brain and the recent messages. Keep what comes back.</p><code>POST /v1/brains/organize</code></div>
+  </div>
+  <p class="keeps"><svg class="ic"><use href="#i-shield"/></svg>Kiori stores no brains and no chats. The brain travels with each call and comes straight back to you.</p>
+
+  <section class="card">
+    <div class="card-h"><h2><span class="num">1</span>Your Kiori key</h2><button class="btn pri" id="createKey">Create key</button></div>
+    <p class="desc">Goes in your app's server, or in the Kiori extension for SillyTavern.</p>
+    <div class="tbl"><table><thead><tr><th>Label</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr></thead><tbody>
+      ${project.keys.map(k => `<tr><td><b style="font-weight:500">${h(k.label || 'key')}</b>${k.prefix === auth().slice(0, 10) ? ' <span class="tag t-blue">this browser</span>' : ''}</td><td class="mono small">${h(k.prefix)}…</td><td class="small muted">${when(k.created_at)}</td><td class="small">${ago(k.last_used)}</td><td class="r"><button class="btn sm quiet danger" data-revoke="${h(k.prefix)}">Revoke</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="newkey" id="newKey" hidden></div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2><span class="num">2</span>Your brain API key</h2></div>
+    ${own ? `<p class="desc">The key Kiori thinks with. Paste it, and Kiori recognizes the provider and suggests a model; change it if you like. You pay your provider directly; Kiori adds nothing on top.</p>
+    <div class="keybox in">
+      <div class="keyline" id="keySaved" ${project.llm.set ? '' : 'hidden'}><input class="mono-in" value="${h(project.llm.set ? `${project.llm.provider} · ${project.llm.key}` : '')}" disabled aria-label="Saved brain API key"><button class="btn" id="replaceKey">Replace</button></div>
+      <form class="keyline" id="keyNew" ${project.llm.set ? 'hidden' : ''}><input class="mono-in" id="brainKey" type="password" placeholder="Paste an OpenRouter, OpenAI or Gemini key" autocomplete="off" aria-label="Brain API key"><button class="btn pri" id="saveKey">Save</button></form>
+      <div class="detect ${project.llm.set ? 'ok' : ''}" id="detect" ${project.llm.set ? '' : 'hidden'}><svg class="ic"><use href="#i-check"/></svg><span>${project.llm.set ? `${h(project.llm.provider)} key · works` : ''}</span></div>
+      <div class="model" id="modelBox" hidden>
+        <label for="brainModel">Brain model</label>
+        <select id="brainModel"></select>
+        <input class="mono-in" id="otherModel" list="allModels" placeholder="Search the models this key can use" hidden aria-label="Other model"><datalist id="allModels"></datalist>
+        <span class="hint" id="modelHint"></span>
+      </div>
+    </div>
+    <p class="hint ind">Sealed before it's stored, and only ever sent to its own provider; not even this console can read it back. Tip: give Kiori a key of its own, with a spending limit at your provider.</p>`
+    : `<p class="desc">This project runs on this Kiori's own model key${project.llm.model ? ` (${h(project.llm.model)})` : ''}: there's nothing to set here.</p>`}
+  </section>
+
+  <section class="card">
+    <div class="connect-h"><h2><span class="num">3</span>Connect</h2><div class="seg" id="tabs"><button class="on" data-t="st">SillyTavern</button><button data-t="js">JavaScript</button><button data-t="py">Python</button></div></div>
+    <div data-panel="st">
+      <ol class="steps">
+        <li><b>Add the Kiori extension</b><p>Download it and unzip it into SillyTavern's <span class="mono small">data/default-user/extensions</span> folder, then reload SillyTavern.</p><div class="copyline"><span class="url">${h(location.origin)}/sillytavern.zip</span><a class="btn sm" href="/sillytavern.zip" download>Download</a></div></li>
+        <li><b>Paste your Kiori key</b><p>Open Extensions, find Kiori, and paste the key from step 1. The address is this Kiori's: <span class="mono small">${h(location.origin)}</span>.</p></li>
+        <li><b>Chat as usual</b><p>Each character gets a brain the first time you talk. It's saved in the chat file on your own computer and grows after every reply. Edit and swipe freely: the newest messages wait a moment before they're learned.</p></li>
+      </ol>
+    </div>
+    <div data-panel="js" hidden><pre>${SNIPPETS.js}</pre></div>
+    <div data-panel="py" hidden><pre>${SNIPPETS.py}</pre></div>
+  </section>
+  <p class="usage" id="usage"></p>`;
+
+  // Keys
+  $('#createKey').onclick = async e => {
+    e.target.disabled = true;
+    try {
+      const { key } = await api('POST', '/v1/project/keys', { label: 'app' });
+      const box = $('#newKey');
+      box.innerHTML = `<span>Your new key, shown only now:</span><code>${h(key)}</code><button class="btn sm" id="copyNew">Copy</button><span>Kiori keeps only a hash of it.</span>`;
+      box.hidden = false;
+      $('#copyNew').onclick = ev => copy(key, ev.target);
+    } catch (er) { toast(er.message); }
+    e.target.disabled = false;
+  };
+  $$('[data-revoke]').forEach(b => b.onclick = async () => {
+    const mine = b.dataset.revoke === auth().slice(0, 10);
+    if (!confirm(mine ? 'Revoke the key this browser signed in with? You will be signed out.' : `Revoke ${b.dataset.revoke}…? Apps using it stop working.`)) return;
+    try { await api('DELETE', `/v1/project/keys/${encodeURIComponent(b.dataset.revoke)}`); if (mine) forget(current); render(); }
+    catch (er) { toast(er.message); }
+  });
+
+  // The brain API key and its model
+  if (own) {
+    const detect = (cls, text) => { const d = $('#detect'); d.hidden = !text; d.className = `detect ${cls}`; $('span', d).textContent = text; };
+    $('#replaceKey').onclick = () => { $('#keySaved').hidden = true; $('#keyNew').hidden = false; $('#modelBox').hidden = true; detect('', ''); $('#brainKey').focus(); };
+    $('#brainKey').oninput = e => {
+      const v = e.target.value.trim(), hit = providerOf(v);
+      if (!v) return detect('', '');
+      if (!hit) return detect('warn', 'Not a key Kiori recognizes. Check that you copied all of it.');
+      if (!hit[1]) return detect('warn', hit[2]);
+      detect('', `${hit[1]} key · press Save to check it`);
+    };
+    $('#keyNew').onsubmit = async e => {
+      e.preventDefault();
+      const key = $('#brainKey').value.trim();
+      if (!key) return;
+      const b = $('#saveKey'); b.disabled = true; b.textContent = 'Checking…';
+      try { await api('PATCH', '/v1/project', { llm: { key } }); toast('Your brain API key works and is saved.'); return render(); }
+      catch (er) { detect('bad', er.message); }
+      b.disabled = false; b.textContent = 'Save';
+    };
+    if (project.llm.set) loadModels();
+  }
+  // Connect
+  $('#tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; $$('button', $('#tabs')).forEach(x => x.classList.toggle('on', x === b)); $$('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== b.dataset.t); };
+  // Usage, last 30 days
+  api('GET', '/v1/usage?days=30').then(u => {
+    const calls = u.requests.reduce((t, r) => t + r.calls, 0);
+    $('#usage').textContent = calls ? `Last 30 days: ${calls.toLocaleString()} calls${u.model.totals.cost ? `; Kiori's model work cost you $${u.model.totals.cost.toFixed(2)} at your provider` : ''}.` : '';
+  }).catch(() => {});
+}
+
+async function loadModels() {
+  let m;
+  try { m = await api('GET', '/v1/project/models'); }
+  catch (e) { $('#detect').className = 'detect bad'; $('#detect span').textContent = e.message; return; }
+  const list = [...m.picks, { id: '', name: 'Other model…', hint: 'Any model this key can use.' }];
+  const sel = $('#brainModel'), other = $('#otherModel');
+  const known = list.some(x => x.id === m.current);
+  sel.innerHTML = list.map(x => `<option value="${h(x.id)}">${h(x.name ?? x.id)}${x.recommended ? ' (recommended)' : ''}</option>`).join('');
+  sel.value = known ? m.current : '';
+  $('#allModels').innerHTML = [...m.picks, ...m.models].map(x => `<option value="${h(x.id)}">${h(x.name ?? '')}</option>`).join('');
+  other.value = known ? '' : m.current ?? '';
+  const show = () => { const x = list.find(y => y.id === sel.value); $('#modelHint').textContent = x?.hint ?? ''; other.hidden = sel.value !== ''; };
+  const save = async id => {
+    if (!id || id === m.current) return;
+    try { await api('PATCH', '/v1/project', { llm: { model: id } }); m.current = id; toast(`Kiori now thinks with ${id}.`); }
+    catch (e) { toast(e.message); }
+  };
+  sel.onchange = () => { show(); if (sel.value) save(sel.value); else other.focus(); };
+  other.onchange = () => save(other.value.trim());
+  show();
+  $('#modelBox').hidden = false;
+}
+
+// The admin page: how Kiori is used week by week (customers' projects, or everyone's), and the access requests
+let statsScope = 'customers';
+function statsCard(s) {
+  if (!s) return '<section class="card"><div class="card-h"><h2>Week by week</h2></div><p class="muted small">The weekly numbers could not be loaded.</p></section>';
+  const pct = v => (v == null ? '–' : `${Math.round(v * 100)}%`);
+  return `<section class="card">
+    <div class="card-h"><h2>Week by week</h2><button class="btn sm quiet" id="scope">${s.scope === 'all' ? 'Customers only' : 'Everyone'}</button></div>
+    <p class="muted small">${s.scope === 'all' ? 'Every project, this server’s own included' : 'Customers: projects on their own brain API key'}. ${h(s.totals.projects)} projects, ${h(s.totals.brains)} brains made, ${h(s.totals.learns)} learning calls in all. Weeks start on Monday (UTC); kept 4w is the share of the projects active four weeks before that are still active.</p>
+    <div class="tbl"><table><thead><tr><th>Week of</th><th class="r">Active</th><th class="r">New</th><th class="r">Brains</th><th class="r">Recalls</th><th class="r">Learns</th><th class="r">Checks</th><th class="r">Chats</th><th class="r">Model $</th><th class="r">5xx</th><th class="r">Kept 4w</th><th class="r">Requests</th></tr></thead><tbody>
+    ${[...s.weeks].reverse().map(w => `<tr><td class="small">${h(w.week)}</td>${[w.active, w.new_projects, w.brains, w.recalls, w.learns, w.checks, w.chats, w.model_cost, w.errors].map(v => `<td class="r">${h(v)}</td>`).join('')}<td class="r">${pct(w.kept_4w)}</td><td class="r">${h(w.requests)}</td></tr>`).join('')}
+    </tbody></table></div></section>`;
+}
+async function renderAdmin() {
+  nav(null);
+  $('#app').innerHTML = '<p class="muted">Loading…</p>';
+  let list, stats;
+  try { [list, stats] = await Promise.all([adminApi('GET', '/v1/admin/access'), adminApi('GET', `/v1/admin/stats?weeks=12${statsScope === 'all' ? '&scope=all' : ''}`).catch(() => null)]); }
+  catch (e) { toast(e.message); location.hash = ''; return render(); }
+  $('#app').innerHTML = `<div class="hero" style="grid-template-columns:1fr"><div><h1>Running <em>Kiori</em></h1><p class="lede">How it’s used, week by week, and who asked for access. Counts only: nothing that was said.</p></div></div>
+  ${statsCard(stats)}
+  <section class="card"><div class="card-h"><h2>Access requests</h2></div><p class="muted small">From the form on kiori.io. Approving makes their project, on their own brain API key, and a sign-in link to send them.</p><div class="tbl"><table><thead><tr><th>When</th><th>Who</th><th>What they're building</th><th></th></tr></thead><tbody>
+  ${list.map(r => `<tr><td class="small muted">${when(r.created_at)}</td><td class="wrap"><b style="font-weight:500">${h(r.name || r.email)}</b><span class="muted small" style="display:block">${h([r.company, r.email].filter(Boolean).join(' · '))}</span></td><td class="wrap small" style="max-width:340px">${h(r.use_case)}</td>
+    <td class="r" data-row="${h(r.id)}">${r.status === 'pending' ? `<button class="btn sm quiet" data-decline="${h(r.id)}">Decline</button> <button class="btn sm pri" data-approve="${h(r.id)}">Approve</button>` : `<span class="tag ${r.status === 'approved' ? 't-ok' : 't-gray'}">${h(r.status)}</span>${r.status === 'approved' && r.project_id ? ` <button class="btn sm quiet" data-relink="${h(r.project_id)}">New link</button>` : ''}`}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No requests yet.</td></tr>'}
+  </tbody></table></div></section>`;
+  $('#scope')?.addEventListener('click', () => { statsScope = statsScope === 'all' ? 'customers' : 'all'; renderAdmin(); });
+  $$('[data-approve]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const r = await adminApi('POST', `/v1/admin/access/${b.dataset.approve}/approve`);
+      linkCell($(`[data-row="${CSS.escape(b.dataset.approve)}"]`), r, 'approved');
+    } catch (e) { toast(e.message); b.disabled = false; }
+  });
+  // An approved project's first link ran out or got lost: a new one
+  $$('[data-relink]').forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const r = await adminApi('POST', `/v1/admin/projects/${encodeURIComponent(b.dataset.relink)}/signin`);
+      const req = list.find(x => x.project_id === b.dataset.relink);
+      linkCell(b.closest('td'), { ...r, email: req?.email, name: req?.name }, 'new link');
+    } catch (e) { toast(e.message); b.disabled = false; }
+  });
+  $$('[data-decline]').forEach(b => b.onclick = async () => {
+    if (!confirm('Decline this request?')) return;
+    try { await adminApi('POST', `/v1/admin/access/${b.dataset.decline}/decline`); renderAdmin(); } catch (e) { toast(e.message); }
+  });
+}
+
+// A sign-in link, ready to copy or to send from your own mail app: it works once, for 7 days, and holds no key
+function linkCell(cell, r, label) {
+  const until = new Date(r.expires_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const mail = `mailto:${encodeURIComponent(r.email ?? '')}?subject=${encodeURIComponent('Your Kiori access')}&body=${encodeURIComponent(`Hi${r.name ? ` ${r.name}` : ''},\n\nYour Kiori project is ready. This link signs you in to the console, where you add your brain API key and make your Kiori keys:\n\n${r.link}\n\nIt works once, until ${until}. If it runs out, just reply and we'll send a new one.\n`)}`;
+  cell.innerHTML = `<span class="tag t-ok">${h(label)}</span> <button class="btn sm" data-copylink>Copy link</button> <a class="btn sm" href="${h(mail)}">Email</a>`;
+  $('[data-copylink]', cell).onclick = e => copy(r.link, e.target);
+}
+
+function render() {
+  const signin = takeLink();
+  if (signin) return renderSignin(signin);
+  if (location.hash === '#admin' && adminKey) return renderAdmin();
+  if (!auth()) return adminKey ? renderAdmin() : renderLogin();
+  return renderProject();
+}
+addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>

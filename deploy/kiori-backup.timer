@@ -1,0 +1,14 @@
+# Runs kiori-backup.service every night. Next and last run: systemctl list-timers kiori-backup.timer
+
+[Unit]
+Description=Nightly Kiori backup
+
+[Timer]
+# Server time (UTC on a fresh server), give or take 15 minutes. The backup doesn't stop Kiori.
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=15min
+# A night missed while the server was off runs at the next boot
+Persistent=true
+
+[Install]
+WantedBy=timers.target

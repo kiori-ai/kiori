@@ -1,0 +1,37 @@
+{
+  "name": "kiori",
+  "version": "2.0.0",
+  "description": "Brains for characters: memory, personality and who-knows-what for character AI.",
+  "homepage": "https://kiori.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kiori-ai/kiori.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kiori-ai/kiori/issues"
+  },
+  "type": "module",
+  "bin": {
+    "kiori": "bin/kiori.mjs",
+    "psyche": "bin/psyche.mjs"
+  },
+  "scripts": {
+    "start": "node bin/kiori.mjs serve",
+    "test": "node --no-warnings --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "private": true,
+  "exports": {
+    "./sdk": {
+      "types": "./sdk/kiori.d.ts",
+      "default": "./sdk/kiori.mjs"
+    },
+    "./sdk/psyche": {
+      "types": "./sdk/psyche.d.ts",
+      "default": "./sdk/psyche.mjs"
+    }
+  }
+}
