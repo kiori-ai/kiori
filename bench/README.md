@@ -48,7 +48,7 @@ The ground-truth engine scans every free line as shown: a canary said by someone
 
 The brain model is the same in every Kiori arm, so arms compare Kiori, not models. `oracle-filter` is the honest upper bound of "just filter the transcript": where Kiori beats it, the value is long-range memory rather than filtering.
 
-**Presence and today's server.** Kiori 2.0.0 reads `present` as names only: a `{ name, mode }` entry becomes a name nobody has, so that person counts as absent. The runner therefore sends names (`--present-as hearers`, the default: those in `full` or `heard` mode, which is what 2.0.0 makes of modes anyway). `--present-as room` sends everyone awake in the room, as an app without modes would, which shows the whisper leak. `--present-as modes` (or `--send-modes`) sends `{ name, mode }` objects, for a server that reads them; it stays off until one does. The modes always stay in the ground truth.
+**Presence and today's server.** Kiori 2.0.0 reads `present` as names only: a `{ name, mode }` entry becomes a name nobody has, so that person counts as absent. The runner therefore sends names (`--present-as hearers`, the default: those in `full` or `heard` mode, which is what 2.0.0 makes of modes anyway). `--present-as room` sends everyone awake in the room, as an app without modes would, which shows the whisper leak. `--present-as modes` (or `--send-modes`) sends `{ name, mode }` objects; servers from the partial-presence change on read them, and the runner's default will switch once the runs below are rebased on that server. The modes always stay in the ground truth.
 
 ## The ground truth
 

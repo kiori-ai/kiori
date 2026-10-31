@@ -55,11 +55,12 @@ The brains learn from the chat.
 
 | Field | |
 |---|---|
-| `messages` | The recent messages as they are now, oldest first: at least the last 30, at most 400. Your ids let edits and rerolls be noticed exactly; without ids, the words line them up. `role` is `user`, `assistant` or `narrator` (narration, in nobody's voice); `name` says who speaks; `present` who's there, when you know it. |
+| `messages` | The recent messages as they are now, oldest first: at least the last 30, at most 400. Your ids let edits and rerolls be noticed exactly; without ids, the words line them up. `role` is `user`, `assistant` or `narrator` (narration, in nobody's voice); `name` says who speaks; `present` who's there, when you know it: names, or `{ "name", "mode" }` with mode `full`, `heard`, `overheard`, `saw` or `asleep` (see [Presence](concepts.md#presence-who-knows-what)). Another mode is a `400`. |
 | `player` | The player's name (otherwise the `name` on their messages, or "Player"). |
 | `hold` | The newest messages left for later (4 by default). |
 | `every` | Learn once this many settled messages are new (12 by default). |
 | `now` | `true`: learn whatever is settled now. |
+| `place` | `true`: with one brain, place people anyway (one model call), instead of putting every message in front of the character and the player. |
 
 Answer:
 
@@ -70,11 +71,11 @@ Answer:
   "rewound": [],
   "waiting": 0,
   "held": 4,
-  "placed": [{ "id": "m7", "n": 7, "present": ["Mira", "Tom", "Leo"], "scene": "the net loft, evening" }]
+  "placed": [{ "id": "m7", "n": 7, "present": ["Mira", "Tom", "Leo", { "name": "Ines", "mode": "overheard" }], "scene": "the net loft, evening" }]
 }
 ```
 
-`placed` lists the messages Kiori placed in this call (group chats, messages sent without `present`): your `id` when the message had one, `n` its place in the `messages` you sent (from 1), who was there and the scene. Send those back as the messages' `present` and they are never placed again. `dropped.told` counts the records of passing something on that weren't kept (not the character's own line, or told to someone who wasn't there).
+`placed` lists the messages Kiori placed in this call (group chats, messages sent without `present`): your `id` when the message had one, `n` its place in the `messages` you sent (from 1), who was there (a name, or `{ "name", "mode" }` when they took it in only partly) and the scene. Send those back as the messages' `present` and they are never placed again. `dropped.told` counts the records of passing something on that weren't kept (not the character's own line, or told to someone who wasn't there).
 
 `rewound` lists the brains that unlearned what an edited, rerolled or deleted message taught (from which message, and how many memories went). `waiting` is how many settled messages wait for the next learning. `warnings` appears when something couldn't be done; the brains still come back with whatever did happen. Keep the brains that come back.
 

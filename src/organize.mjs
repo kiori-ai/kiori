@@ -12,7 +12,7 @@ import { config } from './config.mjs';
 import { askJSON, requireModelKey } from './llm.mjs';
 import { evidenceFound, norm, textOf, num, tokens, whoIs, sameCharacter, samePerson, mentions, bareName } from './text.mjs';
 import { fingerprint, characterOf, addMemories, setRelation, setState, getRelations, getState, closestFirst, mergeCard, touch, answerWith, RELATION_FIELDS, LIMITS } from './brainfile.mjs';
-import { placeEvents, isPresent, placementChunks, eventLine, speakersIn } from './scenes.mjs';
+import { placeEvents, modeOf, perceived, presentOf, placementChunks, eventLine, speakersIn, MODES } from './scenes.mjs';
 import { searchMemories, queryVector, vectorFor, playerName, embedMissing } from './recall.mjs';
 import { profile } from './personality.mjs';
 import { decay, consolidate } from './sleep.mjs';
@@ -81,6 +81,7 @@ How memory works here:
 - They know only what happened in front of them or was said to them out loud. A message at the edge of a scene can also narrate what happened before they arrived or after they left (someone running from another room, a night before, a talk elsewhere): they know none of that. Never write "after he saw X" or anything they couldn't have witnessed.
 - Narration (STORY lines, and the narration inside a reply) is what really happened. What people say is a claim: ${c.name} believes it or not according to how much they trust the speaker. A shared past the player only claims in dialogue, that isn't in their memories, is not a fact.
 - For each item, say how they came to know it. Someone telling them something is not them seeing it: if Tom says what Mira did, they know Tom said it.
+- A message marked as only heard, overheard or seen without the words is all they got of it. Never fill in what they missed; a half-heard thing is a vague memory, and they know they only half heard it.
 - Their personality and how much they care about the people involved decide what matters: a small thing from someone they love becomes an anchor, a gesture from someone they dislike stays faint.
 - Keep the concrete details that will matter later: where, who, what exactly, the order of events, names, numbers, promises, what was given. Use every name exactly as the story gives it; never mix two people's names.
 - ${player} is the player's character. ${c.name} knows about them only what these scenes show.
@@ -132,9 +133,23 @@ export function eventsOf(messages, { player, solo = null }) {
         if (role === 'player') speaker = player;
         else if (named) { role = 'character'; speaker = named; }
         else if (solo && given !== 'narrator') { role = 'character'; speaker = solo; }
-        // At most 50 people in one message: more is no scene, and each name is looked up for every brain
-        const present = Array.isArray(m.present) ? [...new Set(m.present.map(x => String(x ?? '').trim().slice(0, 120)).filter(Boolean))].slice(0, 50) : null;
-        out.push({ n: out.length + 1, at: skipped + k + 1, id: m.id == null || m.id === '' ? null : String(m.id).slice(0, 200), role, speaker, text, present, scene: null, fp: fingerprint(role, text) });
+        // Who was there: names (full), or { name, mode }. At most 50 people in one message: more is no scene, and each
+        // name is looked up for every brain
+        let present = null;
+        const modes = {};
+        if (Array.isArray(m.present)) {
+            const names = new Map();
+            for (const x of m.present) {
+                const person = x && typeof x === 'object' && !Array.isArray(x);
+                const name = String((person ? x.name : x) ?? '').trim().slice(0, 120), mode = person && x.mode != null ? String(x.mode) : 'full';
+                if (!MODES.includes(mode)) throw bad(`present: a mode is one of ${MODES.join(', ')}`);
+                if (!name || names.has(norm(name)) || names.size >= 50) continue;
+                names.set(norm(name), name);
+                if (mode !== 'full') modes[norm(name)] = mode;
+            }
+            present = [...names.values()];
+        }
+        out.push({ n: out.length + 1, at: skipped + k + 1, id: m.id == null || m.id === '' ? null : String(m.id).slice(0, 200), role, speaker, text, present, modes, scene: null, fp: fingerprint(role, text) });
     }
     return out;
 }
@@ -232,19 +247,21 @@ function saidBy(e, quote) {
     return (line && speakersIn(line)[0]) || null;
 }
 const NARRATED = ['saw', 'read', 'inferred'], SPOKEN = ['heard', 'told', 'inferred'];
+// What a message taken in only partly allows: only heard, it was heard or told; overheard, overheard; only seen, seen
+const PARTLY = { heard: ['heard', 'told'], overheard: ['overheard'], saw: ['saw'] }, CAP = { heard: 0.85, overheard: 0.4 };
 const BELIEF = { saw: 1, read: 0.9, heard: 0.85, told: 0.85, overheard: 0.4, inferred: 0.5, rumor: 0.5 };
 // How a character knows an item, worked out from the message its quote is in, not taken from the model: narration (or
 // an action in *stars*, or their own line) is seen, someone's line is heard from them. The person the teller quoted
-// stays only when that message names them. Confidence comes from how, and from how much they trusted the teller
-// before this pass; the model may only lower it.
+// stays only when that message names them. A message they took in only partly decides it (e.mode). Confidence comes
+// from how, and from how much they trusted the teller before this pass; the model may only lower it.
 function provenance(item, e, { self, scope, trust }) {
-    let by = saidBy(e, item.evidence);
+    let by = e.mode === 'saw' ? null : saidBy(e, item.evidence);
     if (by && (sameCharacter(whoIs(by, scope), self) || [...e.text.matchAll(/\*([^*\n]+)\*/g)].some(m => evidenceFound(item.evidence, m[1])))) by = null;
-    const allowed = by ? SPOKEN : NARRATED;
+    const allowed = PARTLY[e.mode] ?? (by ? SPOKEN : NARRATED);
     const source = { how: allowed.includes(item.how) ? item.how : allowed[0], ...(by && { by }), at: e.seq };
     const via = bareName(item.via);
     if (via && mentions(e.text, { name: via }) && !(by && samePerson(via, by)) && ![self.name, ...self.aliases].some(n => samePerson(n, via))) source.origin = via;
-    let confidence = by && source.origin ? 0.7 : BELIEF[source.how];
+    let confidence = Math.min(by && source.origin ? 0.7 : BELIEF[source.how], CAP[e.mode] ?? 1);
     if (by) confidence *= 0.6 + 0.4 * trust(by) / 100;
     // A 0 is how models leave a number empty, so only a doubt above it counts
     if (item.confidence > 0) confidence = Math.min(confidence, item.confidence);
@@ -261,24 +278,33 @@ async function learnBatch(project, brain, batch, player, scope) {
         prompt: prompt({ c: brain, player, events: batch, known, relations: getRelations(brain), state: getState(brain), plans, forgot }),
     });
 
-    // The auditor at write time: only what the scenes prove is kept
+    // The auditor at write time: only what the scenes prove is kept, as the character took them in. A word they missed
+    // everywhere in them can't be in a quote, however close the rest of the quote is
     const scenes = batch.map(lineOf).join('\n');
+    const missed = new Set(batch.flatMap(e => e.missed ?? []));
+    for (const w of tokens(scenes)) missed.delete(w);
+    const proven = q => evidenceFound(q, scenes) && !tokens(q).some(w => missed.has(w));
     const dropped = { memories: 0, facts: 0, intentions: 0, forgot: 0, told: 0 };
-    const keep = (list, key) => list.filter(x => (evidenceFound(x.evidence, scenes) ? true : (dropped[key]++, false)));
+    const keep = (list, key) => list.filter(x => (proven(x.evidence) ? true : (dropped[key]++, false)));
     const span = { from: batch[0].seq, to: batch.at(-1).seq };
     const self = characterOf(brain), relations = getRelations(brain);
     const trust = name => relations.find(x => samePerson(bareName(x.target), bareName(name)))?.trust ?? 50;
     // Memories and facts with where they came from: the message their quote is in
-    const sourced = (list, key) => list.flatMap(x => { const e = locate(x.evidence, batch, scenes); return e ? [{ x, ...provenance(x, e, { self, scope, trust }) }] : (dropped[key]++, []); });
+    const sourced = (list, key) => list.flatMap(x => { const e = proven(x.evidence) && locate(x.evidence, batch, scenes); return e ? [{ x, ...provenance(x, e, { self, scope, trust }) }] : (dropped[key]++, []); });
     const memories = sourced(r.memories, 'memories').map(({ x, source, confidence }) => ({ ...x, kind: 'memory', ...span, source, confidence }));
     const facts = sourced(r.facts, 'facts').map(({ x: f, source, confidence }) => ({ kind: 'fact', title: f.fact.slice(0, 120), body: f.fact, about: [f.about], importance: 0.7, emotion: 0.2, ...span, evidence: f.evidence, source, confidence }));
-    // What they passed on: only from their own line, and only to people who were there. A lie needs the truth quoted
-    // from the scenes, or it is kept as a plain record of what they said
-    const there = (e, name) => { const c = whoIs(name, scope); return c ? isPresent(e, c, scope) : (e.present ?? []).some(n => samePerson(bareName(n), name)); };
+    // What they passed on: only from their own line, and only to people who were there to hear it (in full, or on the
+    // phone: not through a wall, not only seeing it, not asleep). A lie needs the truth quoted from the scenes, or it is
+    // kept as a plain record of what they said
+    const there = (e, name) => {
+        const c = whoIs(name, scope), n = c ? null : (e.present ?? []).find(x => samePerson(bareName(x), name));
+        const mode = c ? modeOf(e, c, scope) : n == null ? null : e.modes?.[norm(n)] ?? 'full';
+        return mode === 'full' || mode === 'heard';
+    };
     const told = r.told.flatMap(t => {
-        const e = locate(t.evidence, batch, scenes), to = [...new Set(t.to.map(bareName).filter(Boolean))].slice(0, 12), said = t.said.trim() || t.evidence;
+        const e = proven(t.evidence) && locate(t.evidence, batch, scenes), to = [...new Set(t.to.map(bareName).filter(Boolean))].slice(0, 12), said = t.said.trim() || t.evidence;
         if (!e || !to.length || !sameCharacter(whoIs(saidBy(e, t.evidence) ?? '', scope), self) || to.some(n => samePerson(n, self.name) || !there(e, n))) return (dropped.told++, []);
-        const lie = t.lie === true && evidenceFound(t.truth, scenes);
+        const lie = t.lie === true && proven(t.truth);
         return [{ kind: 'told', title: `Told ${to.join(', ')}: ${said}`.slice(0, 120), body: `I told ${to.join(', ')}: "${said}"`, about: to, told_to: to, said, lie, ...(lie && { truth: t.truth }), importance: 0.5, emotion: 0.2, evidence: t.evidence, ...span, source: { how: 'saw', at: e.seq } }];
     });
     const intentions = keep(r.intentions, 'intentions').map(i => ({ kind: 'intention', title: i.title, body: i.body, importance: i.importance, ...span, evidence: i.evidence }));
@@ -301,11 +327,12 @@ async function learnBatch(project, brain, batch, player, scope) {
     return { written: memories.length + facts.length + intentions.length + forgets.length + told.length, dropped };
 }
 
-// One brain learns its new stretch (events, in order; the first gets number seq)
+// One brain learns its new stretch (events, in order; the first gets number seq), each message as they took it in:
+// asleep, or not there, they learn nothing from it
 async function learnBrain(project, brain, events, seq, { player, cast }) {
     const mine = events.map((e, k) => ({ ...e, seq: seq + k }));
     const character = characterOf(brain);
-    const witnessed = mine.filter(e => isPresent(e, character, { story: cast, everyone: cast, player }));
+    const witnessed = mine.map(e => perceived(e, character, { story: cast, everyone: cast, player })).filter(Boolean);
     const out = { name: brain.name, from: mine[0].seq, to: mine.at(-1).seq, messages: witnessed.length, written: 0, dropped: { memories: 0, facts: 0, intentions: 0, forgot: 0, told: 0 } };
     let pieces = 0;
     for (const batch of learningBatches(witnessed)) {
@@ -364,14 +391,15 @@ export async function organize(project, brains, single, body) {
     if (due.length) {
         const first = Math.min(...due.map(p => p.start));
         const stretch = events.slice(first, settled);
-        // One character: whatever happens in the chat happens in front of them and the player
-        if (brains.length === 1) for (const e of stretch) e.present ??= [brains[0].name, player];
+        // One character: whatever happens in the chat happens in front of them and the player, unless the app asks for
+        // placing (place: true), which costs a call
+        if (brains.length === 1 && body.place !== true) for (const e of stretch) e.present ??= [brains[0].name, player];
         else {
             // What Kiori places here goes back as placed: sent back as present, it is never placed again
             const unplaced = stretch.filter(e => !e.present);
             try {
                 await placeEvents(project, stretch, { before: events.slice(Math.max(0, first - 4), first), characters: cast, player });
-                placed = unplaced.map(e => ({ ...(e.id && { id: e.id }), n: e.at, present: e.present, scene: e.scene }));
+                placed = unplaced.map(e => ({ ...(e.id && { id: e.id }), n: e.at, present: presentOf(e), scene: e.scene }));
             }
             catch (e) {
                 if (FINAL.includes(e.code)) throw e;

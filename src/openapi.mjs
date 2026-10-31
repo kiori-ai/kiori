@@ -53,8 +53,9 @@ const schemas = {
     ChatMessage: obj({
         id: str('Your id for the message: edits and rerolls are noticed exactly'), role: str('user, assistant, or narrator (narration in nobody\'s voice); system and tool messages are skipped'),
         content: { description: 'Text, or OpenAI-style parts', oneOf: [{ type: 'string' }, { type: 'array' }] },
-        name: str('Who speaks: a group chat\'s character, or the player\'s name on user messages'), present: arr(str(), 'Who is there, when you know it'),
+        name: str('Who speaks: a group chat\'s character, or the player\'s name on user messages'), present: arr(ref('Present'), 'Who is there, when you know it'),
     }, ['role', 'content']),
+    Present: { description: 'A name (there, taking it all in), or a name and how they took the message in', oneOf: [{ type: 'string' }, obj({ name: str(), mode: str(null, { enum: ['full', 'heard', 'overheard', 'saw', 'asleep'] }) }, ['name'])] },
     OneOrMany: obj({ brain: ref('Brain'), brains: arr(ref('Brain'), 'For a group chat: one brain per character (at most 12)') }, [], 'Send "brain" or "brains"'),
     CreateInput: obj({
         character_card: { description: 'A Tavern / SillyTavern character card (v1, v2, v3) as JSON, or a card PNG in base64', oneOf: [{ type: 'object' }, { type: 'string' }] },
@@ -72,13 +73,14 @@ const schemas = {
     OrganizeInput: { allOf: [ref('OneOrMany'), obj({
         messages: arr(ref('ChatMessage'), 'The chat\'s recent messages as they are now, oldest first (send at least the last 30, not only the new ones)'), player: str(),
         hold: int('The newest messages left for later, as they may still be rerolled (default 4)'), every: int('Learn once this many settled messages are new (default 12)'), now: bool('Learn whatever is settled now'),
+        place: bool('With one brain: place people anyway (a model call), instead of everyone in front of the character and the player'),
     }, ['messages'])] },
     OrganizeResult: obj({
         brain: ref('Brain'), brains: arr(ref('Brain')),
         learned: arr(obj({ name: str(), from: int(), to: int(), messages: int(), written: int(), dropped: obj({ memories: int(), facts: int(), intentions: int(), forgot: int(), told: int('Told records whose listeners weren\'t there, or that weren\'t their own line') }) })),
         rewound: arr(obj({ name: str(), from: int(), forgot: int() }), 'Brains that unlearned what an edited, rerolled or deleted message taught'),
         waiting: int('Settled messages not learned yet'), held: int(), warnings: arr(str()),
-        placed: arr(obj({ id: str(), n: int('Its place in the messages sent, from 1'), present: arr(str()), scene: nul(str()) }), 'Messages Kiori placed in this call: send these back as their present, and they are never placed again'),
+        placed: arr(obj({ id: str(), n: int('Its place in the messages sent, from 1'), present: arr(ref('Present')), scene: nul(str()) }), 'Messages Kiori placed in this call: send these back as their present, and they are never placed again'),
     }),
     CheckInput: { allOf: [ref('OneOrMany'), obj({ draft: str('The reply to check'), messages: arr(ref('ChatMessage')), player: str() }, ['draft'])] },
     CheckResult: obj({

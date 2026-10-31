@@ -67,7 +67,8 @@ export interface Message {
     /** Who speaks (a group chat's character, or the player's name on user messages) */
     name?: string;
     /** Who is there, when you know it (otherwise Kiori works it out in group chats) */
-    present?: string[];
+    /** Who was there: names, or { name, mode } with mode full | heard | overheard | saw | asleep (a plain name is full). */
+    present?: (string | { name: string; mode: 'full' | 'heard' | 'overheard' | 'saw' | 'asleep' })[];
 }
 
 type OneOrMany = { brain: Brain; brains?: never } | { brains: Brain[]; brain?: never };

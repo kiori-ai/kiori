@@ -27,7 +27,7 @@ const { createBrain } = await import('../src/create.mjs');
 const { recall, searchMemories, contextOf, embedMissing } = await import('../src/recall.mjs');
 const { organize, lineUp, rewind, eventsOf } = await import('../src/organize.mjs');
 const { checkReply } = await import('../src/check.mjs');
-const { isPresent, placementChunks, placeEvents, speakersIn } = await import('../src/scenes.mjs');
+const { isPresent, placementChunks, placeEvents, speakersIn, perceive } = await import('../src/scenes.mjs');
 const { consolidate, KEEP_AT_MOST } = await import('../src/sleep.mjs');
 const { detectProvider, setBrainKey, brainKeyView } = await import('../src/providers.mjs');
 const { exportObsidian } = await import('../src/export.mjs');
@@ -43,6 +43,8 @@ function vectorOf(text) {
     for (const w of words(text)) v[crypto.createHash('md5').update(w).digest()[0]] += 1;
     return v.some(Boolean) ? v : [1, ...v.slice(1)];
 }
+// A quote a model could only write by filling in what a character missed (set by a test)
+let filledIn = null;
 const lines = block => [...String(block).matchAll(/^\[(\d+)\] ([^:\n]+?): (.*)$/gm)].map(m => ({ n: Number(m[1]), speaker: m[2].replace(/ \(player\)$/, ''), player: m[2].endsWith('(player)'), text: m[3] }));
 function answer(prompt) {
     if (prompt.includes('[a piece the model fails]')) return null;
@@ -74,6 +76,7 @@ function answer(prompt) {
             memories: [
                 { title: `${memory[1]} remembers ${scenes[0].text.slice(0, 30)}`, body: `I remember: ${scenes.map(s => s.text).join(' ')}`, keys: words(scenes[0].text).slice(0, 3), about: ['Leo'], importance: 0.7, emotion: 0.5, evidence: quote },
                 { title: 'Something made up', body: 'This never happened.', keys: [], about: [], importance: 0.5, emotion: 0.1, evidence: 'words nobody ever said in these scenes at all' },
+                ...(filledIn && prompt.includes('words you missed') ? [{ title: 'Filled in', body: 'I know it all.', keys: [], about: [], importance: 0.5, emotion: 0.1, evidence: filledIn }] : []),
             ],
             facts: passed.map(s => ({ about: 'Leo', fact: s.text, evidence: cite(s), how: 'saw', via: s.text.match(/\b([A-Z][a-z]+) (?:says|said)\b/)?.[1] ?? (/rumor/.test(s.text) ? 'Rook' : ''), confidence: /\bmaybe\b/.test(s.text) ? 0.2 : 1 })),
             told: passed.filter(s => /^[A-Z][a-z]+,/.test(s.text)).map(s => ({ to: [s.text.match(/^([A-Z][a-z]+),/)[1]], said: s.text, lie: false, truth: '', evidence: cite(s) })),
@@ -84,6 +87,20 @@ function answer(prompt) {
         };
     }
     if (/Split it into scenes/.test(prompt) && prompt.includes('[scenes nobody can place]')) return { scenes: [] };
+    // One scene for the stretch, in the new shape: a line with "[arrives]" places its speaker from that message on,
+    // "[next room: Name]" has Name overhear that message
+    if (/Split it into scenes/.test(prompt) && /\[arrives\]|\[next room: /.test(prompt)) {
+        const [, from, to] = prompt.match(/Cover every message from (\d+) to (\d+)/).map(Number);
+        const player = prompt.match(/\. (.+?) is the player's character/)[1];
+        const people = [{ name: player, mode: 'full' }];
+        for (const l of lines(prompt.slice(prompt.indexOf('STORY:'))).filter(x => x.n >= from && x.n <= to)) {
+            if (!l.player && l.speaker !== 'STORY' && !people.some(p => p.name === l.speaker)) people.push({ name: l.speaker, mode: 'full', ...(l.text.includes('[arrives]') && { from: l.n }) });
+            const next = l.text.match(/\[next room: (\w+)\]/);
+            if (next) people.push({ name: next[1], mode: 'overheard', from: l.n, to: l.n });
+        }
+        return { scenes: [{ from, to, place: 'the loft', people }] };
+    }
+    // Otherwise one scene per message, in the old shape (present: names), which is still read
     if (/Split it into scenes/.test(prompt)) {
         const [, from, to] = prompt.match(/Cover every message from (\d+) to (\d+)/).map(Number);
         const player = prompt.match(/\. (.+?) is the player's character/)[1];
@@ -844,10 +861,135 @@ test('placing: the cast in the prompt is only who the stretch can involve', asyn
     const prompt = chatCalls('Split it into scenes').at(-1).body.messages[0].content;
     const listed = prompt.slice(prompt.indexOf('KNOWN CHARACTERS:'), prompt.indexOf('STORY:'));
     assert.deepEqual([...listed.matchAll(/^- (\S+):/gm)].map(m => m[1]).sort(), ['Kestrel17', 'Kestrel28', 'Kestrel3', 'Kestrel5']);
-    assert.ok(prompt.length < 3000, `${prompt.length} characters`);
+    assert.ok(prompt.length < 3500, `${prompt.length} characters`);
     // A small cast is listed whole: someone described but not named can still be found
     await placeEvents(P, eventsOf([{ role: 'narrator', content: 'A tall stranger walks in.' }], { player: 'Leo' }), { characters: cast.slice(0, 3), player: 'Leo' });
     assert.match(chatCalls('Split it into scenes').at(-1).body.messages[0].content, /- Kestrel0:[\s\S]*- Kestrel2:/);
+});
+
+// ---------- Partial presence: how each person took a message in ----------
+const person = name => ({ id: name, name, aliases: [] });
+const learnPrompt = name => chatCalls(`You are the memory of ${name}`).at(-1)?.body.messages[0].content.split('WAS IN:')[1] ?? null;
+const lightBrains = (...names) => Promise.all(names.map(name => createBrain(P, { name, description: 'Of Saltmere.', depth: 'light' })));
+
+test('presence: present takes names and { name, mode }; a plain name is full, and a mode nobody knows is refused', () => {
+    const [e] = eventsOf([{ role: 'narrator', content: 'The tide turns at nine.', present: ['Tom', { name: 'Ines', mode: 'saw' }, { name: 'Rook', mode: 'full' }, { name: 'Mira' }, 'Tom'] }], { player: 'Leo' });
+    assert.deepEqual([e.present, e.modes], [['Tom', 'Ines', 'Rook', 'Mira'], { ines: 'saw' }]);
+    assert.ok(['Tom', 'Ines', 'Rook', 'Mira'].every(n => isPresent(e, person(n))) && !isPresent(e, person('Leo')));
+    assert.deepEqual(['Tom', 'Ines', 'Mira', 'Leo'].map(n => perceive(e, person(n)).mode), ['full', 'saw', 'full', null]);
+    assert.equal(perceive(e, person('Tom')).text, 'The tide turns at nine.');
+    assert.throws(() => eventsOf([{ role: 'user', content: 'Hi.', present: [{ name: 'Ines', mode: 'whisper' }] }], { player: 'Leo' }), x => x.status === 400 && /a mode is one of full, heard, overheard, saw, asleep/.test(x.message));
+    // What each mode takes in of a narrator's message: narration, a "Name:" line, and words in quotes
+    const [n] = eventsOf([{ role: 'narrator', content: 'The lamp gutters over the marisol charts.\nTom: Bring the boat round at dawn.\nMira shrugs. "The cellar key is mine," she says.', present: ['Tom', { name: 'Ines', mode: 'heard' }, { name: 'Rook', mode: 'saw' }, { name: 'Ana', mode: 'asleep' }, { name: 'Bo', mode: 'overheard' }] }], { player: 'Leo' });
+    assert.equal(perceive(n, person('Ines')).text, '(you couldn\'t see this)\nTom: Bring the boat round at dawn.\n(you couldn\'t see this) "The cellar key is mine," (you couldn\'t see this)');
+    assert.equal(perceive(n, person('Rook')).text, 'The lamp gutters over the marisol charts.\nTom: (words you couldn\'t hear)\nMira shrugs. (words you couldn\'t hear) she says.');
+    assert.deepEqual(perceive(n, person('Ana')), { mode: 'asleep', text: '', missed: [] });
+    const bo = perceive(n, person('Bo'));
+    assert.doesNotMatch(bo.text, /marisol/);
+    assert.match(bo.text, /…/);
+    assert.deepEqual(perceive(n, person('Bo')), bo, 'the same gaps every time');
+});
+
+test('presence: an overheard message reaches the organizer masked, the same way every time, and a quote of a missed word is dropped', async () => {
+    const line = 'The crate of rifles waits under the chapel floor beside the north wall until Sunday.';
+    const messages = [{ id: 'o1', role: 'assistant', name: 'Tom', content: line, present: ['Tom', { name: 'Rook', mode: 'overheard' }] }];
+    // A quote with one word Rook missed put back: close enough to pass as a quote, but he never heard that word
+    const masked = perceive(eventsOf(messages, { player: 'Leo' })[0], person('Rook')).text;
+    const said = line.split(' '), got = masked.split(' '), gap = got.findIndex(w => w.includes('…'));
+    assert.ok(gap >= 0 && got.filter(w => w.includes('…')).length === 4, masked);
+    got[gap] = said[gap];
+    filledIn = got.join(' ');
+    assert.ok(evidenceFound(filledIn, masked), 'it would pass as a quote on its own');
+    const prompts = [];
+    try {
+        for (let i = 0; i < 2; i++) {
+            const r = await organize(P, await lightBrains('Rook', 'Tom'), false, { messages, player: 'Leo', now: true, hold: 0 });
+            prompts.push(learnPrompt('Rook'));
+            const [rook, tom] = r.brains;
+            assert.equal(r.learned.find(l => l.name === 'Rook').dropped.memories, 2, 'the made-up one and the filled-in one');
+            assert.ok(!rook.memories.some(m => m.evidence === filledIn));
+            const heard = rook.memories.find(m => m.kind === 'memory');
+            assert.deepEqual([heard.source.how, heard.source.by, heard.confidence <= 0.4], ['overheard', 'Tom', true]);
+            assert.ok(tom.memories.some(m => m.body.includes(line)), 'Tom said it all');
+        }
+    } finally { filledIn = null; }
+    assert.match(prompts[0], /\[1\] Tom \(you overheard this from nearby; … = words you missed\): The .*…/);
+    assert.doesNotMatch(prompts[0], new RegExp(said[gap]));
+    assert.equal(prompts[0], prompts[1]);
+});
+
+test('presence: a whisper reaches its listener; the others saw it happen and learn none of its words, and check shows it to them without its words', async () => {
+    let [mi, tom, ines] = await lightBrains('Mira', 'Tom', 'Ines');
+    const messages = [
+        { id: 'w1', role: 'narrator', content: '*Tom leans close to Mira at the bar.*', present: ['Tom', 'Mira', 'Ines'] },
+        { id: 'w2', role: 'assistant', name: 'Tom', content: '*whispers* The ledger sits inside the organ loft behind the pipes.', present: ['Tom', 'Mira', { name: 'Ines', mode: 'saw' }] },
+    ];
+    const r = await organize(P, [mi, tom, ines], false, { messages, player: 'Leo', now: true, hold: 0 });
+    [mi, tom, ines] = r.brains;
+    assert.match(learnPrompt('Ines'), /\[2\] Tom \(you saw this but couldn't hear the words\): \*whispers\* \(words you couldn't hear\)/);
+    assert.ok(mi.memories.some(m => m.body.includes('ledger')));
+    assert.doesNotMatch(JSON.stringify(ines.memories), /ledger|organ|pipes/);
+    assert.equal(r.learned.find(l => l.name === 'Ines').messages, 2, 'she was there for both');
+    // At read time too: the message she only saw is listed without its words
+    await checkReply(P, [mi, ines], { draft: 'Ines: What was that about?', messages, player: 'Leo' });
+    const prompt = fake.calls.findLast(c => JSON.stringify(c.body).includes('You check a draft reply')).body.messages[0].content, block = prompt.slice(prompt.indexOf('### Ines'));
+    assert.match(block, /Recent messages Ines witnessed:\n[\s\S]*\[2\] Tom \(you saw this but couldn't hear the words\): \*whispers\* \(words you couldn't hear\)/);
+    assert.doesNotMatch(block, /ledger/);
+});
+
+test('presence: asleep learns nothing; on a call, dialogue lines but no narration', async () => {
+    const messages = [{ id: 's1', role: 'narrator', content: 'The lamp gutters over the marisol charts.\nTom: Bring the boat round to the quay at dawn tomorrow.', present: ['Tom', { name: 'Ines', mode: 'heard' }, { name: 'Rook', mode: 'asleep' }] }];
+    const asked = chatCalls('You are the memory of Rook').length;
+    const r = await organize(P, await lightBrains('Tom', 'Ines', 'Rook'), false, { messages, player: 'Leo', now: true, hold: 0 });
+    const [, ines, rook] = r.brains;
+    assert.equal(chatCalls('You are the memory of Rook').length, asked, 'no learning call for someone asleep');
+    assert.deepEqual([r.learned.find(l => l.name === 'Rook').messages, rook.memories.filter(m => m.scope === 'chat').length, rook.chat.learned], [0, 0, 1]);
+    const heard = learnPrompt('Ines');
+    assert.match(heard, /\[1\] STORY \(you only heard this\): \(you couldn't see this\)\nTom: Bring the boat round to the quay at dawn tomorrow\./);
+    assert.doesNotMatch(heard + JSON.stringify(ines.memories), /marisol/);
+});
+
+test('placing: someone who arrives mid-scene is there from their arrival, not before (in a group, and in a solo chat with place: true)', async () => {
+    const messages = [
+        { id: 'a1', role: 'assistant', name: 'Mira', content: 'The spare key hides behind the loose third brick of the chimney.' },
+        { id: 'a2', role: 'user', content: 'I will not tell a soul about the chimney.' },
+        { id: 'a3', role: 'assistant', name: 'Tom', content: '[arrives] Evening, both. Cold out on the quay tonight.' },
+        { id: 'a4', role: 'assistant', name: 'Mira', content: 'Sit down, Tom, the kettle is nearly boiling.' },
+    ];
+    const r = await organize(P, await lightBrains('Mira', 'Tom'), false, { messages, player: 'Leo', now: true, hold: 0 });
+    const [mi, tom] = r.brains;
+    assert.deepEqual(r.placed.map(p => p.present), [['Leo', 'Mira'], ['Leo', 'Mira'], ['Leo', 'Mira', 'Tom'], ['Leo', 'Mira', 'Tom']]);
+    assert.equal(r.learned.find(l => l.name === 'Tom').messages, 2);
+    assert.doesNotMatch(JSON.stringify(tom.memories), /brick|chimney/, 'what was said before he came in never reaches him');
+    assert.ok(mi.memories.some(m => m.body.includes('brick')));
+    assert.equal(tom.chat.learned, 4);
+    // One character: everything is in front of them, unless the app asks for placing
+    const asked = chatCalls('Split it into scenes').length;
+    const all = await organize(P, await lightBrains('Tom'), true, { messages, player: 'Leo', now: true, hold: 0 });
+    assert.deepEqual([chatCalls('Split it into scenes').length - asked, all.learned[0].messages, all.placed], [0, 4, []]);
+    const placed = await organize(P, await lightBrains('Tom'), true, { messages, player: 'Leo', now: true, hold: 0, place: true });
+    assert.deepEqual([chatCalls('Split it into scenes').length - asked, placed.learned[0].messages, placed.placed.length], [1, 2, 4]);
+    assert.doesNotMatch(JSON.stringify(placed.brain.memories), /brick|chimney/);
+});
+
+test('organize: placed carries modes, and sent back they hold with no placement call; an answer in the old shape is everyone, all scene', async () => {
+    const messages = [
+        { id: 'r1', role: 'assistant', name: 'Mira', content: 'The boat leaves the harbor at midnight with the crates aboard.' },
+        { id: 'r2', role: 'assistant', name: 'Tom', content: '[next room: Rook] Then we load the salted cod into the hold before the tide.' },
+    ];
+    const r = await organize(P, await lightBrains('Mira', 'Tom', 'Rook'), false, { messages, player: 'Leo', now: true, hold: 0 });
+    assert.deepEqual(r.placed.map(p => p.present), [['Leo', 'Mira', 'Tom'], ['Leo', 'Mira', 'Tom', { name: 'Rook', mode: 'overheard' }]]);
+    const first = learnPrompt('Rook');
+    assert.match(first, /^\s*\[2\] Tom \(you overheard this/);
+    const back = messages.map((m, i) => ({ ...m, present: r.placed[i].present }));
+    const placing = chatCalls('Split it into scenes').length;
+    const again = await organize(P, await lightBrains('Mira', 'Tom', 'Rook'), false, { messages: back, player: 'Leo', now: true, hold: 0 });
+    assert.deepEqual([chatCalls('Split it into scenes').length, again.placed], [placing, []]);
+    assert.equal(learnPrompt('Rook'), first, 'the same modes, the same gaps');
+    // The fake's usual answer is the old shape, { present: [names] }: everyone in it is there, in full
+    const old = eventsOf([{ role: 'assistant', name: 'Mira', content: 'The tide is high.' }, { role: 'user', content: 'So it is.' }], { player: 'Leo' });
+    await placeEvents(P, old, { characters: [person('Mira')], player: 'Leo' });
+    assert.deepEqual(old.map(e => [e.present, e.modes]), [[['Mira', 'Leo'], {}], [['Leo'], {}]]);
 });
 
 test('sleep: near-duplicates merge, and a brain past what it holds forgets its faintest conversation memories', async () => {

@@ -4,7 +4,7 @@
 import { askJSON, requireModelKey } from './llm.mjs';
 import { mentions, sameCharacter, whoIs } from './text.mjs';
 import { characterOf } from './brainfile.mjs';
-import { isPresent, speakersIn, eventLine } from './scenes.mjs';
+import { perceived, speakersIn, eventLine } from './scenes.mjs';
 import { contextOf, searchMemories, queryVector, vectorFor } from './recall.mjs';
 import { eventsOf, playerOf } from './organize.mjs';
 
@@ -55,9 +55,10 @@ export async function checkReply(project, brains, body) {
     const blocks = checked.map(b => {
         const c = characterOf(b);
         const ctx = contextOf(b, { text: draft, hits: searchMemories(b, draft, vectorFor(project, b, qv), { limit: 8 }), budget: 4500, player });
-        // The recent messages they were there for, and apart from them the ones nobody placed (whether they saw those
-        // is for the auditor to tell from the messages, such as who came and went)
-        const seen = events.filter(e => e.present && isPresent(e, c, scope)).slice(-12);
+        // The recent messages they were there for, as they took them in (a whisper they only saw, without its words),
+        // and apart from them the ones nobody placed (whether they saw those is for the auditor to tell from the
+        // messages, such as who came and went)
+        const seen = events.filter(e => e.present).map(e => perceived(e, c, scope)).filter(Boolean).slice(-12);
         const unplaced = events.filter(e => !e.present).slice(-12);
         return `### ${b.name}\nWho: ${[b.card.who, b.card.personality].filter(Boolean).join(' ').slice(0, 600)}\n${ctx.text}\n\nRecent messages ${b.name} witnessed:\n${seen.map(e => eventLine(e, e.n)).join('\n') || '(none)'}${unplaced.length ? `\n\nRecent messages nobody placed (whether ${b.name} was there, tell from the messages themselves):\n${unplaced.map(e => eventLine(e, e.n)).join('\n')}` : ''}`;
     });

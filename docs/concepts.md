@@ -41,8 +41,23 @@ Presence is who was physically in the scene for each message, and it decides who
 - In a one-on-one chat, every message happens in front of the character and the player.
 - In a group chat, a message's `present` list is used as it is. Without one, the organizer reads the new stretch scene by scene: changes of place and time, someone described but not named, and the message that moves the story somewhere new belongs to the new scene.
 - A character learns only from the messages they were present for. Someone who wasn't there doesn't know what was said, not even as a hint.
+- Someone who arrives or leaves mid-scene is placed only for the messages they were there for, so what was said before they came in never reaches them.
 
-When Kiori places people itself, the organize answer gives its placement back as `placed`. Send those lists back as the messages' `present`, and those messages are never placed again (and never cost a placement call again). Placing reads only the characters a stretch can involve: those named in it or in the messages just before, and those present just before. A cast of up to 8 is listed whole, so someone described but not named is still found.
+Being there isn't always all or nothing. A `present` entry can be a name (they took the message in fully) or `{ "name", "mode" }`:
+
+| Mode | When | What they take in |
+|---|---|---|
+| `full` (a plain name) | in the scene | all of it |
+| `heard` | on the phone, blindfolded | only what is said: `Name: words` lines, words in quotes, a character's own words. The rest becomes "(you couldn't see this)" |
+| `overheard` | in the next room, at the door, through a wall | what is said, with about 40% of its words lost ("…"). The same message always loses the same words |
+| `saw` | a whisper or an aside they weren't meant for, behind glass | what is seen (narration, actions in `*stars*`); the words become "(words you couldn't hear)" |
+| `asleep` | asleep, unconscious, drugged | nothing |
+
+A whisper is the speaker's listeners in `full` and everyone else at the table in `saw`, for that one message. The cutting is done by Kiori's code, not asked of a model, and what learning writes is checked against the cut text: a word a character didn't hear can't be quoted, so it can't be learned. What they took in only partly is remembered that way: overheard things as `overheard` (confidence at most 0.4), heard ones as heard or told, seen ones as seen. Check shows each character the recent messages as they took them in.
+
+When Kiori places people itself, it gives modes too: next room or through a wall is `overheard`, a phone call `heard`, a whisper's other people `saw`, someone asleep `asleep`. A one-on-one chat is all `full` and isn't placed, unless you send `place: true` (a placement call, so someone can arrive or overhear there too).
+
+When Kiori places people itself, the organize answer gives its placement back as `placed`, modes included. Send those lists back as the messages' `present`, and those messages are never placed again (and never cost a placement call again). Placing reads only the characters a stretch can involve: those named in it or in the messages just before, and those present just before. A cast of up to 8 is listed whole, so someone described but not named is still found.
 
 Names are matched strictly: a character's name or alias, or a shortened form that fits exactly one character ("Luc" for Luc Moreau). Two full names that share a word are two people, so Ana Moreau being there doesn't put her brother Luc there.
 
