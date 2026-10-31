@@ -4,11 +4,13 @@ import { profile, attachment, inThisPerson } from './personality.mjs';
 import { norm } from './text.mjs';
 import { zip } from './zip.mjs';
 
-const FOLDERS = { memory: 'Memories', person: 'People', place: 'Places', belief: 'Beliefs', feeling: 'Feelings', secret: 'Secrets', habit: 'Habits', skill: 'Skills', object: 'Objects', fact: 'Facts', intention: 'Plans', trait: 'Traits', forgot: 'Forgotten' };
+const FOLDERS = { memory: 'Memories', person: 'People', place: 'Places', belief: 'Beliefs', feeling: 'Feelings', secret: 'Secrets', habit: 'Habits', skill: 'Skills', object: 'Objects', fact: 'Facts', intention: 'Plans', trait: 'Traits', forgot: 'Forgotten', told: 'Told' };
 const COLORS = { Memories: '#a5b4fc', People: '#f472b6', Places: '#34d399', Beliefs: '#fbbf24', Feelings: '#f87171', Secrets: '#c084fc', Habits: '#2dd4bf', Skills: '#60a5fa', Objects: '#fb923c', Facts: '#e2e8f0', Plans: '#facc15', Traits: '#4ade80', Mind: '#64748b' };
 // A file or folder name: no path separators or characters Obsidian and Windows refuse, and no leading dots (so never
 // . or .., which would climb out of the folder the zip is unpacked into)
 const safe = s => String(s).replace(/[\\/:*?"<>|#^[\]]/g, '').replace(/^[.\s]+/, '').trim().slice(0, 90) || 'Untitled';
+// Where a memory came from, as one line: "told by Tom, from Mira, message 17"
+const sourceLine = s => s && `"${[s.how === 'told' ? `told by ${s.by ?? 'someone'}` : s.by ? `${s.how} from ${s.by}` : s.how, s.origin && `from ${s.origin}`, s.at && `message ${s.at}`].filter(Boolean).join(', ').replace(/"/g, "'")}"`;
 const fm = o => `---\n${Object.entries(o).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${Array.isArray(v) ? `[${v.join(', ')}]` : v}`).join('\n')}\n---\n`;
 
 export function exportObsidian(brain) {
@@ -42,7 +44,7 @@ export function exportObsidian(brain) {
         if (m.kind === 'mind') continue;
         m.about.forEach(a => mentioned.add(a));
         const links = [...m.about.map(a => `- ${personLink(a)}`), ...(m.links ?? []).filter(id => titleOf.has(id)).map(id => `- [[${titleOf.get(id)}]]`)];
-        put(`${FOLDERS[m.kind] ?? 'Memories'}/${titleOf.get(m.id)}.md`, `${fm({ type: m.kind, keys: m.keys, strength: m.strength.toFixed(2), importance: m.importance.toFixed(2), scope: m.scope === 'chat' ? 'conversation' : 'core', evidence: m.evidence ? `"${m.evidence.replace(/"/g, "'")}"` : null })}${m.gist ? `> Gist: ${m.gist}\n\n` : ''}${m.body}\n\n## Links\n${links.join('\n')}\n`);
+        put(`${FOLDERS[m.kind] ?? 'Memories'}/${titleOf.get(m.id)}.md`, `${fm({ type: m.kind, keys: m.keys, strength: m.strength.toFixed(2), importance: m.importance.toFixed(2), scope: m.scope === 'chat' ? 'conversation' : 'core', evidence: m.evidence ? `"${m.evidence.replace(/"/g, "'")}"` : null, source: sourceLine(m.source) })}${m.gist ? `> Gist: ${m.gist}\n\n` : ''}${m.body}\n\n## Links\n${links.join('\n')}\n`);
     }
     for (const name of mentioned) if (!people.has(norm(name))) put(`People/${noteName('People', name)}.md`, `${fm({ type: 'person' })}Someone in ${brain.name}'s life.\n`);
     // The human model only where this person has something of their own to say

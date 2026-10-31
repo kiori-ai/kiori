@@ -10,14 +10,20 @@
 // comes from, or it is not written.
 import { config } from './config.mjs';
 import { askJSON, requireModelKey } from './llm.mjs';
-import { evidenceFound, norm, textOf, num } from './text.mjs';
+import { evidenceFound, norm, textOf, num, tokens, whoIs, sameCharacter, samePerson, mentions, bareName } from './text.mjs';
 import { fingerprint, characterOf, addMemories, setRelation, setState, getRelations, getState, closestFirst, mergeCard, touch, answerWith, RELATION_FIELDS, LIMITS } from './brainfile.mjs';
-import { placeEvents, isPresent, placementChunks, eventLine } from './scenes.mjs';
+import { placeEvents, isPresent, placementChunks, eventLine, speakersIn } from './scenes.mjs';
 import { searchMemories, queryVector, vectorFor, playerName, embedMissing } from './recall.mjs';
 import { profile } from './personality.mjs';
 import { decay, consolidate } from './sleep.mjs';
 
 const quoted = { type: 'string', description: 'The exact words from the scenes this comes from (copy 6-20 words verbatim)' };
+// How they know it: a claim, not the source stored (that is worked out from the message the quote is in)
+const SOURCE = {
+    how: { type: 'string', enum: ['saw', 'heard', 'told', 'read', 'inferred'], description: 'How they came to know it: saw it happen, heard it said, were told it, read it, or worked it out' },
+    via: { type: 'string', description: 'If the speaker was passing on what someone else said, that person; else ""' },
+    confidence: { type: 'number', description: '0-1, only when they doubt it' },
+};
 const SCHEMA = {
     type: 'object',
     properties: {
@@ -31,14 +37,14 @@ const SCHEMA = {
                     keys: { type: 'array', items: { type: 'string' } }, about: { type: 'array', items: { type: 'string' } },
                     importance: { type: 'number', description: '0-1, how much this matters to THEM (their personality and how much they care about the people involved decide)' },
                     emotion: { type: 'number', description: '0-1, how intense it felt' },
-                    evidence: quoted,
+                    evidence: quoted, ...SOURCE,
                 },
                 required: ['title', 'body', 'keys', 'about', 'importance', 'emotion', 'evidence'],
             },
         },
         facts: {
-            type: 'array', description: 'Things they now know for sure that they did not before (an identity, a secret, a fact about someone), one per item',
-            items: { type: 'object', properties: { about: { type: 'string' }, fact: { type: 'string' }, evidence: quoted }, required: ['about', 'fact', 'evidence'] },
+            type: 'array', description: 'Things they now know, or were told, that they did not before (an identity, a secret, a fact about someone), one per item',
+            items: { type: 'object', properties: { about: { type: 'string' }, fact: { type: 'string' }, evidence: quoted, ...SOURCE }, required: ['about', 'fact', 'evidence'] },
         },
         relations: {
             type: 'array', description: 'Only people whose place in their heart changed; 0-100. Trust rises slowly and falls fast.',
@@ -50,6 +56,10 @@ const SCHEMA = {
             items: { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' }, importance: { type: 'number' }, evidence: quoted }, required: ['title', 'body', 'importance', 'evidence'] },
         },
         finished: { type: 'array', items: { type: 'string' }, description: 'Titles of their existing plans that were done or dropped here' },
+        told: {
+            type: 'array', description: 'Only when THEY passed on to someone there what someone else said, or a secret: whom they told and what they said',
+            items: { type: 'object', properties: { to: { type: 'array', items: { type: 'string' } }, said: { type: 'string' }, lie: { type: 'boolean', description: 'Only if they knew it was false' }, truth: { type: 'string', description: 'For a lie: the exact words from the scenes that show the truth' }, evidence: quoted }, required: ['to', 'said', 'lie', 'evidence'] },
+        },
         forgot: {
             type: 'array', description: 'Only if something made THEM forget (a memory wipe, amnesia, a spell): exactly what is gone',
             items: { type: 'object', properties: { what: { type: 'string' }, evidence: quoted }, required: ['what', 'evidence'] },
@@ -70,6 +80,7 @@ function prompt({ c, player, events, known, relations, state, plans, forgot }) {
 How memory works here:
 - They know only what happened in front of them or was said to them out loud. A message at the edge of a scene can also narrate what happened before they arrived or after they left (someone running from another room, a night before, a talk elsewhere): they know none of that. Never write "after he saw X" or anything they couldn't have witnessed.
 - Narration (STORY lines, and the narration inside a reply) is what really happened. What people say is a claim: ${c.name} believes it or not according to how much they trust the speaker. A shared past the player only claims in dialogue, that isn't in their memories, is not a fact.
+- For each item, say how they came to know it. Someone telling them something is not them seeing it: if Tom says what Mira did, they know Tom said it.
 - Their personality and how much they care about the people involved decide what matters: a small thing from someone they love becomes an anchor, a gesture from someone they dislike stays faint.
 - Keep the concrete details that will matter later: where, who, what exactly, the order of events, names, numbers, promises, what was given. Use every name exactly as the story gives it; never mix two people's names.
 - ${player} is the player's character. ${c.name} knows about them only what these scenes show.
@@ -103,12 +114,14 @@ export const MAX_MESSAGES = 400;
 // The chat's messages as events, numbered by their place in the call (n). System and tool messages, and empty ones,
 // are not part of the story. The player's messages carry the player's name; with one character (solo), a reply without
 // a name is theirs. role "narrator" is narration: what happened, in nobody's voice. Of a longer list, the newest
-// MAX_MESSAGES are read (lining up and learning only need the recent part).
+// MAX_MESSAGES are read (lining up and learning only need the recent part). at: the message's place in the list sent,
+// from 1, for answers that point back at it.
 export function eventsOf(messages, { player, solo = null }) {
     if (!Array.isArray(messages)) throw bad('messages must be a list, oldest first');
-    if (messages.length > MAX_MESSAGES) messages = messages.slice(-MAX_MESSAGES);
+    const skipped = Math.max(0, messages.length - MAX_MESSAGES);
+    if (skipped) messages = messages.slice(-MAX_MESSAGES);
     const out = [];
-    for (const m of messages) {
+    for (const [k, m] of messages.entries()) {
         if (!m || typeof m !== 'object' || Array.isArray(m)) throw bad('each message must be an object: { id, role, content }');
         const given = String(m.role ?? '').toLowerCase();
         let role = ROLE[given];
@@ -121,7 +134,7 @@ export function eventsOf(messages, { player, solo = null }) {
         else if (solo && given !== 'narrator') { role = 'character'; speaker = solo; }
         // At most 50 people in one message: more is no scene, and each name is looked up for every brain
         const present = Array.isArray(m.present) ? [...new Set(m.present.map(x => String(x ?? '').trim().slice(0, 120)).filter(Boolean))].slice(0, 50) : null;
-        out.push({ n: out.length + 1, id: m.id == null || m.id === '' ? null : String(m.id).slice(0, 200), role, speaker, text, present, scene: null, fp: fingerprint(role, text) });
+        out.push({ n: out.length + 1, at: skipped + k + 1, id: m.id == null || m.id === '' ? null : String(m.id).slice(0, 200), role, speaker, text, present, scene: null, fp: fingerprint(role, text) });
     }
     return out;
 }
@@ -202,7 +215,43 @@ function advance(brain, mine, seq) {
     brain.chat.learned = Math.max(brain.chat.learned, seq);
 }
 
-async function learnBatch(project, brain, batch, player) {
+// Where a quote comes from: the first message that holds it, else the first two in a row that do (a quote across two
+// lines), else the first message with its first word. null: the scenes don't hold it, and the item isn't written.
+const lineOf = e => `${e.speaker ?? ''}: ${e.text}`;
+function locate(quote, batch, scenes) {
+    if (!evidenceFound(quote, scenes)) return null;
+    const first = tokens(quote)[0];
+    return batch.find(e => evidenceFound(quote, lineOf(e)))
+        ?? batch.find((e, i) => i + 1 < batch.length && evidenceFound(quote, `${lineOf(e)}\n${lineOf(batch[i + 1])}`))
+        ?? batch.find(e => tokens(e.text).includes(first)) ?? batch[0];
+}
+// Who said the quoted words: the message's speaker, or the "Name:" line of a narrator's message that holds them
+function saidBy(e, quote) {
+    if (e.role !== 'narrator') return e.speaker;
+    const line = e.text.split('\n').find(l => evidenceFound(quote, l));
+    return (line && speakersIn(line)[0]) || null;
+}
+const NARRATED = ['saw', 'read', 'inferred'], SPOKEN = ['heard', 'told', 'inferred'];
+const BELIEF = { saw: 1, read: 0.9, heard: 0.85, told: 0.85, overheard: 0.4, inferred: 0.5, rumor: 0.5 };
+// How a character knows an item, worked out from the message its quote is in, not taken from the model: narration (or
+// an action in *stars*, or their own line) is seen, someone's line is heard from them. The person the teller quoted
+// stays only when that message names them. Confidence comes from how, and from how much they trusted the teller
+// before this pass; the model may only lower it.
+function provenance(item, e, { self, scope, trust }) {
+    let by = saidBy(e, item.evidence);
+    if (by && (sameCharacter(whoIs(by, scope), self) || [...e.text.matchAll(/\*([^*\n]+)\*/g)].some(m => evidenceFound(item.evidence, m[1])))) by = null;
+    const allowed = by ? SPOKEN : NARRATED;
+    const source = { how: allowed.includes(item.how) ? item.how : allowed[0], ...(by && { by }), at: e.seq };
+    const via = bareName(item.via);
+    if (via && mentions(e.text, { name: via }) && !(by && samePerson(via, by)) && ![self.name, ...self.aliases].some(n => samePerson(n, via))) source.origin = via;
+    let confidence = by && source.origin ? 0.7 : BELIEF[source.how];
+    if (by) confidence *= 0.6 + 0.4 * trust(by) / 100;
+    // A 0 is how models leave a number empty, so only a doubt above it counts
+    if (item.confidence > 0) confidence = Math.min(confidence, item.confidence);
+    return { source, confidence: Math.round(confidence * 100) / 100 };
+}
+
+async function learnBatch(project, brain, batch, player, scope) {
     const text = batch.map(e => e.text).join('\n');
     const known = searchMemories(brain, text, vectorFor(project, brain, await queryVector(project, [brain], text)), { limit: 10 });
     const plans = brain.memories.filter(m => m.kind === 'intention' && m.status === 'active').map(m => m.title);
@@ -213,15 +262,28 @@ async function learnBatch(project, brain, batch, player) {
     });
 
     // The auditor at write time: only what the scenes prove is kept
-    const scenes = batch.map(e => `${e.speaker ?? ''}: ${e.text}`).join('\n');
-    const dropped = { memories: 0, facts: 0, intentions: 0, forgot: 0 };
+    const scenes = batch.map(lineOf).join('\n');
+    const dropped = { memories: 0, facts: 0, intentions: 0, forgot: 0, told: 0 };
     const keep = (list, key) => list.filter(x => (evidenceFound(x.evidence, scenes) ? true : (dropped[key]++, false)));
     const span = { from: batch[0].seq, to: batch.at(-1).seq };
-    const memories = keep(r.memories, 'memories').map(m => ({ ...m, kind: 'memory', ...span }));
-    const facts = keep(r.facts, 'facts').map(f => ({ kind: 'fact', title: f.fact.slice(0, 120), body: f.fact, about: [f.about], importance: 0.7, emotion: 0.2, ...span, evidence: f.evidence }));
+    const self = characterOf(brain), relations = getRelations(brain);
+    const trust = name => relations.find(x => samePerson(bareName(x.target), bareName(name)))?.trust ?? 50;
+    // Memories and facts with where they came from: the message their quote is in
+    const sourced = (list, key) => list.flatMap(x => { const e = locate(x.evidence, batch, scenes); return e ? [{ x, ...provenance(x, e, { self, scope, trust }) }] : (dropped[key]++, []); });
+    const memories = sourced(r.memories, 'memories').map(({ x, source, confidence }) => ({ ...x, kind: 'memory', ...span, source, confidence }));
+    const facts = sourced(r.facts, 'facts').map(({ x: f, source, confidence }) => ({ kind: 'fact', title: f.fact.slice(0, 120), body: f.fact, about: [f.about], importance: 0.7, emotion: 0.2, ...span, evidence: f.evidence, source, confidence }));
+    // What they passed on: only from their own line, and only to people who were there. A lie needs the truth quoted
+    // from the scenes, or it is kept as a plain record of what they said
+    const there = (e, name) => { const c = whoIs(name, scope); return c ? isPresent(e, c, scope) : (e.present ?? []).some(n => samePerson(bareName(n), name)); };
+    const told = r.told.flatMap(t => {
+        const e = locate(t.evidence, batch, scenes), to = [...new Set(t.to.map(bareName).filter(Boolean))].slice(0, 12), said = t.said.trim() || t.evidence;
+        if (!e || !to.length || !sameCharacter(whoIs(saidBy(e, t.evidence) ?? '', scope), self) || to.some(n => samePerson(n, self.name) || !there(e, n))) return (dropped.told++, []);
+        const lie = t.lie === true && evidenceFound(t.truth, scenes);
+        return [{ kind: 'told', title: `Told ${to.join(', ')}: ${said}`.slice(0, 120), body: `I told ${to.join(', ')}: "${said}"`, about: to, told_to: to, said, lie, ...(lie && { truth: t.truth }), importance: 0.5, emotion: 0.2, evidence: t.evidence, ...span, source: { how: 'saw', at: e.seq } }];
+    });
     const intentions = keep(r.intentions, 'intentions').map(i => ({ kind: 'intention', title: i.title, body: i.body, importance: i.importance, ...span, evidence: i.evidence }));
     const forgets = keep(r.forgot, 'forgot').map(f => ({ kind: 'forgot', title: `Forgot: ${f.what}`.slice(0, 120), body: f.what, importance: 1, strength: 1, ...span, evidence: f.evidence }));
-    addMemories(brain, [...memories, ...facts, ...intentions, ...forgets], { scope: 'chat' });
+    addMemories(brain, [...memories, ...facts, ...intentions, ...forgets, ...told], { scope: 'chat' });
     // What this pass changes in feelings, mood and plans is kept as it was before, so a rewind past the pass puts it back
     const undo = { from: span.from, relations: [], state: brain.state.chat, closed: [] };
     for (const rel of r.relations) {
@@ -236,7 +298,7 @@ async function learnBatch(project, brain, batch, player) {
     if (!brain.card.who && r.card?.who) mergeCard(brain, r.card);
     decay(brain);
     await embedMissing(project, brain);
-    return { written: memories.length + facts.length + intentions.length + forgets.length, dropped };
+    return { written: memories.length + facts.length + intentions.length + forgets.length + told.length, dropped };
 }
 
 // One brain learns its new stretch (events, in order; the first gets number seq)
@@ -244,11 +306,11 @@ async function learnBrain(project, brain, events, seq, { player, cast }) {
     const mine = events.map((e, k) => ({ ...e, seq: seq + k }));
     const character = characterOf(brain);
     const witnessed = mine.filter(e => isPresent(e, character, { story: cast, everyone: cast, player }));
-    const out = { name: brain.name, from: mine[0].seq, to: mine.at(-1).seq, messages: witnessed.length, written: 0, dropped: { memories: 0, facts: 0, intentions: 0, forgot: 0 } };
+    const out = { name: brain.name, from: mine[0].seq, to: mine.at(-1).seq, messages: witnessed.length, written: 0, dropped: { memories: 0, facts: 0, intentions: 0, forgot: 0, told: 0 } };
     let pieces = 0;
     for (const batch of learningBatches(witnessed)) {
         let r;
-        try { r = await learnBatch(project, brain, batch, player); }
+        try { r = await learnBatch(project, brain, batch, player, { story: cast, everyone: cast, player }); }
         catch (e) {
             // A piece further on failed: what the pieces before it taught is kept and goes back with the brain, and the
             // next call resumes at this piece. (When nothing was learned yet, or the key or credits are the problem,
@@ -298,13 +360,19 @@ export async function organize(project, brains, single, body) {
     let due = plans.filter(p => settled - p.start >= every);
     if (due.length) requireModelKey(project);
     const cast = brains.map(characterOf);
+    let placed = [];
     if (due.length) {
         const first = Math.min(...due.map(p => p.start));
         const stretch = events.slice(first, settled);
         // One character: whatever happens in the chat happens in front of them and the player
         if (brains.length === 1) for (const e of stretch) e.present ??= [brains[0].name, player];
         else {
-            try { await placeEvents(project, stretch, { before: events.slice(Math.max(0, first - 4), first), characters: cast, player }); }
+            // What Kiori places here goes back as placed: sent back as present, it is never placed again
+            const unplaced = stretch.filter(e => !e.present);
+            try {
+                await placeEvents(project, stretch, { before: events.slice(Math.max(0, first - 4), first), characters: cast, player });
+                placed = unplaced.map(e => ({ ...(e.id && { id: e.id }), n: e.at, present: e.present, scene: e.scene }));
+            }
             catch (e) {
                 if (FINAL.includes(e.code)) throw e;
                 warnings.push(`Couldn't work out who was in each scene (${e.message}); learning waits for the next call`);
@@ -334,5 +402,5 @@ export async function organize(project, brains, single, body) {
     }
     for (const b of brains) if (learned.some(l => l.name === b.name) || rewound.some(r => r.name === b.name)) touch(b);
     const waiting = Math.max(0, ...plans.filter(p => !due.includes(p)).map(p => settled - p.start));
-    return answerWith({ learned, rewound, waiting, held: Math.min(hold, events.length), ...(warnings.length && { warnings }) }, brains, single);
+    return answerWith({ learned, rewound, waiting, held: Math.min(hold, events.length), placed, ...(warnings.length && { warnings }) }, brains, single);
 }

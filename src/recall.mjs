@@ -69,7 +69,7 @@ export function searchMemories(brain, text, qv, { limit = 10, kinds = null } = {
         kw = Math.min(1, (kw / maxKw) * 1.6);
         const fv = qv && freshVector(m);
         const sem = fv ? Math.max(0, cosine(qv, unpackVector(fv))) : 0;
-        const base = 0.12 * m.strength + 0.08 * m.importance + (m.scope === 'chat' ? 0.04 : 0);
+        const base = 0.12 * m.strength * (m.confidence ?? 1) + 0.08 * m.importance + (m.scope === 'chat' ? 0.04 : 0);
         const score = (qv ? 0.5 * sem + 0.35 * kw : 0.8 * kw) + base;
         return { m, score, about: m.about.map(norm) };
     }).sort((a, b) => b.score - a.score);
@@ -81,6 +81,16 @@ export function searchMemories(brain, text, qv, { limit = 10, kinds = null } = {
 }
 
 const clarity = m => (m.strength >= 0.6 ? 'clear' : m.strength >= 0.3 ? 'fading' : 'faded');
+// Known for sure: seen or read, or from before sources were kept
+const sure = m => !m.source || ['saw', 'read'].includes(m.source.how);
+// Where something they were told came from: in a few words for a memory's header ("told by Tom, from Mira"), and as a
+// sentence for what they've been told, with how much they believe it
+const SHORT = { heard: 'heard from', told: 'told by', overheard: 'overheard from', inferred: 'guessed from what' };
+const TOLD = { heard: b => `${b} said it in front of them`, told: b => `${b} told them`, overheard: b => `they overheard ${b}`, inferred: b => `they worked it out from what ${b} said` };
+const NOBODY = { inferred: 'they worked it out', rumor: 'talk going around' };
+const fromWhom = s => [s.by ? `${SHORT[s.how] ?? 'told by'} ${s.by}${s.how === 'inferred' ? ' said' : ''}` : NOBODY[s.how] ?? s.how, s.origin && `from ${s.origin}`].filter(Boolean).join(', ');
+const belief = c => (c == null || c >= 0.75 ? 'They believe it.' : c >= 0.5 ? 'They half believe it.' : "They're not sure.");
+const toldLine = ({ fact, source: s, confidence }) => `- ${fact} (${s.by ? (TOLD[s.how] ?? TOLD.told)(s.by) : NOBODY[s.how] ?? s.how}${s.origin ? `; ${s.by ?? 'it'} said it came from ${s.origin}` : ''}. ${belief(confidence)})`;
 
 // Everything a character brings to this moment, as data and as a ready-to-use text block for a prompt
 export function contextOf(brain, { text = '', hits = [], budget = 6000, player = null } = {}) {
@@ -89,7 +99,7 @@ export function contextOf(brain, { text = '', hits = [], budget = 6000, player =
     const own = brain.memories;
     const timeline = own.filter(m => m.scope === 'chat' && !['mind', 'forgot', 'fact'].includes(m.kind)).sort((a, b) => (a.from ?? 0) - (b.from ?? 0)).map(m => firstSentence(m.gist || m.body));
     // What this conversation taught them for sure (their core facts come up as memories when relevant)
-    const facts = own.filter(m => m.kind === 'fact' && m.scope === 'chat').map(m => ({ about: m.about, fact: m.body }));
+    const facts = own.filter(m => m.kind === 'fact' && m.scope === 'chat').map(m => ({ about: m.about, fact: m.body, ...(m.source && { source: m.source }), ...(m.confidence != null && { confidence: m.confidence }) }));
     const forgot = own.filter(m => m.kind === 'forgot').map(m => m.body);
     const intentions = own.filter(m => m.kind === 'intention' && m.status === 'active').map(m => m.title);
     const notes = new Map(own.filter(m => m.kind === 'mind').map(m => [m.title.toLowerCase(), m.body]));
@@ -107,13 +117,14 @@ export function contextOf(brain, { text = '', hits = [], budget = 6000, player =
     add(`How ${name} differs from an average person`, profile(brain.personality, { pronouns: brain.pronouns, max: 6 }));
     add('Right now', [state.mood && `Mood: ${state.mood}`, state.on_mind.length && `On their mind: ${state.on_mind.join('; ')}`, state.wants.length && `Wants: ${state.wants.join('; ')}`, intentions.length && `Plans and promises: ${intentions.join('; ')}`].filter(Boolean).join('\n'));
     add('People in their life', closestFirst(relations, player).slice(0, 14).map(r => `- ${r.target}: ${RELATION_FIELDS.filter(f => r[f] != null).map(f => `${f} ${r[f]}`).join(', ')}${r.note ? `. ${r.note}` : ''}`).join('\n'));
-    add('What they know for sure', facts.slice(-20).map(f => `- ${f.fact}`).join('\n'));
+    add('What they know for sure', facts.filter(sure).slice(-20).map(f => `- ${f.fact}`).join('\n'));
+    add("What they've been told (they know who told them, and say so)", facts.filter(f => !sure(f)).slice(-20).map(toldLine).join('\n'));
     add("Their story so far, as they lived it (details not recalled below stay vague; they don't make them up)", timeline.slice(-30).map(s => `- ${s}`).join('\n'));
-    add('What this moment brings to mind', hits.map(h => `### ${h.title} (${clarity(h)})\n${clarity(h) === 'faded' ? `Only the gist is left: ${h.gist ?? firstSentence(h.body)}` : h.body}`).join('\n\n'));
+    add('What this moment brings to mind', hits.map(h => `### ${h.title} (${[clarity(h), !sure(h) && fromWhom(h.source)].filter(Boolean).join(', ')})\n${clarity(h) === 'faded' ? `Only the gist is left: ${h.gist ?? firstSentence(h.body)}` : h.body}`).join('\n\n'));
     add('In their mind', mind.map(m => `- ${m.title}: ${m.general}${m.in_them.length ? ` In them: ${m.in_them.join(' ')}` : ''}${m.note ? ` (${m.note})` : ''}`).join('\n'));
     add('They were made to forget (nothing they say may show they still know it)', forgot.map(f => `- ${f}`).join('\n'));
     // "This section", not "above": in a group chat several characters' sections stand one after another
-    parts.push(`## Ground rules\n${name} knows only what this section ("What ${name} brings to this moment") says, what is in their card, and what happened in front of them in this conversation. Anything else (what was said where they weren't, other people's secrets, a shared past nobody can find here) they don't know: they don't mention it, hint at it or "sense" it.${player ? ` ${player} is the player; ${name} knows about them only what they saw or were told.` : ''}`);
+    parts.push(`## Ground rules\n${name} knows only what this section ("What ${name} brings to this moment") says, what is in their card, and what happened in front of them in this conversation. Anything else (what was said where they weren't, other people's secrets, a shared past nobody can find here) they don't know: they don't mention it, hint at it or "sense" it. What they were told, they know as told: they name who told them and never speak as if they saw it.${player ? ` ${player} is the player; ${name} knows about them only what they saw or were told.` : ''}`);
     // Over budget: the longest part (never the rules) is shortened until it fits
     let out = parts.join('\n\n');
     for (let guard = 0; out.length > budget && guard < 20; guard++) {

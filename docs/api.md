@@ -43,7 +43,7 @@ What each character knows right now, for your prompt.
 | `budget` | Characters of text per brain (6000 by default, 200 to 60000). |
 | `limit` | Memories per brain (10 by default, at most 50). |
 
-Answer: `{ "text", "characters": [{ "name", "text", "memories", "relations", "state", "facts", "forgot", "intentions", "mind" }], "check_recommended" }`. With one brain, `text` is the block for your prompt. The brains are only read.
+Answer: `{ "text", "characters": [{ "name", "text", "memories", "relations", "state", "facts", "forgot", "intentions", "mind" }], "check_recommended" }`. With one brain, `text` is the block for your prompt. The brains are only read. Memories and facts learned in a conversation carry `source` (`{ "how", "by", "origin", "at" }`: how they know it, from whom, whom the teller said it came from, and the message) and `confidence` (0 to 1); `text` lists what they were told apart from what they know for sure.
 
 ### POST /v1/brains/organize
 
@@ -66,12 +66,15 @@ Answer:
 ```json
 {
   "brain": { ... },
-  "learned": [{ "name": "Mira", "from": 1, "to": 16, "messages": 16, "written": 5, "dropped": { "memories": 1, "facts": 0, "intentions": 0, "forgot": 0 } }],
+  "learned": [{ "name": "Mira", "from": 1, "to": 16, "messages": 16, "written": 5, "dropped": { "memories": 1, "facts": 0, "intentions": 0, "forgot": 0, "told": 0 } }],
   "rewound": [],
   "waiting": 0,
-  "held": 4
+  "held": 4,
+  "placed": [{ "id": "m7", "n": 7, "present": ["Mira", "Tom", "Leo"], "scene": "the net loft, evening" }]
 }
 ```
+
+`placed` lists the messages Kiori placed in this call (group chats, messages sent without `present`): your `id` when the message had one, `n` its place in the `messages` you sent (from 1), who was there and the scene. Send those back as the messages' `present` and they are never placed again. `dropped.told` counts the records of passing something on that weren't kept (not the character's own line, or told to someone who wasn't there).
 
 `rewound` lists the brains that unlearned what an edited, rerolled or deleted message taught (from which message, and how many memories went). `waiting` is how many settled messages wait for the next learning. `warnings` appears when something couldn't be done; the brains still come back with whatever did happen. Keep the brains that come back.
 
@@ -83,7 +86,7 @@ A draft reply, checked and fixed before it's shown.
 { "brains": [{ ... }, { ... }], "messages": [ ... ], "draft": "Rook: I know about the letter." }
 ```
 
-Answer: `{ "ok": false, "issues": [{ "character": "Rook", "type": "leak", "quote": "the letter", "why": "..." }], "fixed": "Rook: I know about something.", "checked": ["Rook"] }`. Issue types are `leak`, `contradiction`, `invented_past` and `unsupported`. When nothing is wrong, `fixed` is the draft itself. With one brain, that character is checked; in a group, whoever speaks in the draft (`Name: words` lines) or is named in it.
+Answer: `{ "ok": false, "issues": [{ "character": "Rook", "type": "leak", "quote": "the letter", "why": "..." }], "fixed": "Rook: I know about something.", "checked": ["Rook"] }`. Issue types are `leak`, `contradiction`, `invented_past`, `unsupported` and `misattribution` (naming a source the character's brain doesn't give, or speaking as an eyewitness of something they were only told). When nothing is wrong, `fixed` is the draft itself. With one brain, that character is checked; in a group, whoever speaks in the draft (`Name: words` lines) or is named in it.
 
 ### POST /v1/brains/export
 

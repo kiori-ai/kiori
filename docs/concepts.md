@@ -31,7 +31,8 @@ Every memory has a **kind**, a **title**, a **body** in the character's own voic
 - **Strength** decides how clearly it's recalled: clear, fading or faded. After each stretch of conversation, memories that don't matter to the character lose a little strength. Important or emotional ones hold.
 - **Sleep** presses faded memories down to their gist (the meaning stays, the details go) and merges memories that say the same thing. When a brain grows past what a mind holds, its faintest conversation memories go; never its core, its facts or its plans.
 - **Evidence**: every memory learned from a conversation carries the exact words it came from.
-- Special kinds: `fact` (something they now know for sure), `intention` (a plan or a promise, kept until it's done or dropped) and `forgot` (something they were made to forget: nothing they say may show they still know it).
+- **Source**: a memory learned from a conversation also says how they know it (`source`: saw, heard, told, overheard, read, inferred or rumor; `by` whom, the `origin` the teller named, and `at` which message) and how much they believe it (`confidence`, 0 to 1). See [Sources and hearsay](#sources-and-hearsay).
+- Special kinds: `fact` (something they now know, seen or told), `intention` (a plan or a promise, kept until it's done or dropped), `forgot` (something they were made to forget: nothing they say may show they still know it) and `told` (something they passed on: to whom, `told_to`, and what they `said`).
 
 ## Presence: who knows what
 
@@ -41,7 +42,19 @@ Presence is who was physically in the scene for each message, and it decides who
 - In a group chat, a message's `present` list is used as it is. Without one, the organizer reads the new stretch scene by scene: changes of place and time, someone described but not named, and the message that moves the story somewhere new belongs to the new scene.
 - A character learns only from the messages they were present for. Someone who wasn't there doesn't know what was said, not even as a hint.
 
+When Kiori places people itself, the organize answer gives its placement back as `placed`. Send those lists back as the messages' `present`, and those messages are never placed again (and never cost a placement call again). Placing reads only the characters a stretch can involve: those named in it or in the messages just before, and those present just before. A cast of up to 8 is listed whole, so someone described but not named is still found.
+
 Names are matched strictly: a character's name or alias, or a shortened form that fits exactly one character ("Luc" for Luc Moreau). Two full names that share a word are two people, so Ana Moreau being there doesn't put her brother Luc there.
+
+### Sources and hearsay
+
+Being there is one thing; how you know something is another. When Tom tells Ines "Mira says the new one's father sank the Halcyon", Ines doesn't know it for sure: she knows Tom said it, and Tom said it came from Mira.
+
+- **Derived, not trusted.** The organizer says how it thinks the character knows each thing, but Kiori decides from the message the quote is in: narration (or an action in `*stars*`, or their own line) is seen, read or worked out; someone's line is heard or told by them. The person the teller quoted is kept only when that message names them.
+- **Confidence** comes from how they know it (saw 1, read 0.9, heard or told 0.85, told with an origin 0.7, worked out 0.5), times how much they trusted the teller before (`0.6 + 0.4 × trust / 100`, trust 50 when unknown). The organizer may only lower it.
+- **Recall** keeps "What they know for sure" (seen, read, or from a brain without sources) apart from "What they've been told", with the teller, the origin and how much they believe it; memories show their source in their header. A character names who told them, and never speaks as if they saw what they were told.
+- **Gossip** isn't distorted by Kiori: what the teller actually said is what the listener learns, word for word. Confidence falls with each hop, and long-held hearsay blurs in sleep like everything else.
+- **Telling** is kept too: when a character passes something on, a `told` memory records to whom and what, written only from their own line and only for listeners who were there.
 
 ## The organizer
 
@@ -49,14 +62,14 @@ The organizer is the model that writes into brains, on your brain API key. It:
 
 1. **builds** a brain from a card or a description: a sketch of the life, then the past and the inner life;
 2. **places** people in scenes, in a group chat;
-3. **learns**: for each character, from their scenes only, it writes their memories (in the first person), what they now know for sure, how their feelings toward people changed (trust rises slowly and falls fast), their new state, their plans, and anything they were made to forget. Their personality, and how much they care about someone, decide what matters to them.
+3. **learns**: for each character, from their scenes only, it writes their memories (in the first person), what they now know and how they know it, what they passed on and to whom, how their feelings toward people changed (trust rises slowly and falls fast), their new state, their plans, and anything they were made to forget. Their personality, and how much they care about someone, decide what matters to them.
 
 ## The auditor
 
 The auditor is the model that checks, in three places:
 
 - **When writing** (no model needed): everything the organizer wants to write must quote the chat. If the quote isn't really there, it isn't written.
-- **Before a reply is shown** (`/v1/brains/check`): a draft is checked against what each speaking character really knows, for leaks, contradictions, invented pasts and unsupported claims, and fixed with minimal edits.
+- **Before a reply is shown** (`/v1/brains/check`): a draft is checked against what each speaking character really knows, for leaks, contradictions, invented pasts, unsupported claims and misattributions (naming the wrong source, or speaking as an eyewitness of hearsay), and fixed with minimal edits.
 - **During sleep**: it presses faded memories down to their gist.
 
 ## Lining up a chat

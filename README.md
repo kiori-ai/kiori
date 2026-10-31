@@ -32,7 +32,7 @@ Not a chatbot: the mind behind yours. Your app does the talking and your model w
 >
 > **Kiori gives you back:** a brain you keep, what this character knows right now (ready to drop into your prompt), what they just learned, and, if you ask, whether a draft reply gives away something they never heard.
 
-It works with any model, in any language. You bring your own model key (OpenRouter, OpenAI or Gemini) and pay your provider directly. The server has zero dependencies and about 3,600 lines of code, small enough to read in an afternoon.
+It works with any model, in any language. You bring your own model key (OpenRouter, OpenAI or Gemini) and pay your provider directly. The server has zero dependencies and about 3,800 lines of code, small enough to read in an afternoon.
 
 ## 🌸 Why "Kiori"
 
@@ -159,7 +159,7 @@ Settings, the CLI and moving to a server: [docs/self-hosting.md](docs/self-hosti
 - **Nothing to leak.** Kiori stores no brains and no chats. The brain is a JSON object that travels with each call and lives wherever you keep it.
 - **Your model key stays sealed.** It's encrypted at rest (AES-256-GCM), only ever sent to the provider it was saved for, and never shown back whole.
 - **Calls only go where they should.** Model calls go out over https to public addresses only; private networks and cloud metadata addresses are refused at connect time.
-- **Read every line.** One process, zero dependencies, about 3,600 lines of server code. [docs/security.md](docs/security.md) has the details.
+- **Read every line.** One process, zero dependencies, about 3,800 lines of server code. [docs/security.md](docs/security.md) has the details.
 
 ## 📚 Docs
 

@@ -8,7 +8,12 @@ import { newId, clamp, norm, sha, bareName } from './text.mjs';
 import { normalize } from './personality.mjs';
 
 export const VERSION = 1;
-export const KINDS = ['memory', 'person', 'place', 'belief', 'feeling', 'secret', 'habit', 'skill', 'object', 'fact', 'intention', 'trait', 'mind', 'forgot'];
+// told: what they passed on to whom (and, for a lie, the truth). lore and event are a world's items, read already so a
+// brain that holds them loads on every server from this one on
+export const KINDS = ['memory', 'person', 'place', 'belief', 'feeling', 'secret', 'habit', 'skill', 'object', 'fact', 'intention', 'trait', 'mind', 'forgot', 'told', 'lore', 'event'];
+// How someone came to know a thing: saw it, heard it said, was told it, overheard it, read it, worked it out, or it's
+// talk going around
+export const HOW = ['saw', 'heard', 'told', 'overheard', 'read', 'inferred', 'rumor'];
 export const RELATION_FIELDS = ['trust', 'closeness', 'respect', 'resentment', 'attraction'];
 export const CARD_FIELDS = { who: 1000, looks: 1000, personality: 3000, voice: 2000, core: 1000, description: 30000, lore: 30000, scenario: 4000, first_message: 4000, examples: 8000, tagline: 300 };
 // What one brain may hold. A brain this big is consolidated long before (see sleep.mjs); these only stop a bad file.
@@ -20,6 +25,21 @@ const isObject = v => v != null && typeof v === 'object' && !Array.isArray(v);
 const strings = (v, max, len) => (Array.isArray(v) ? v.map(x => str(x, len).trim()).filter(Boolean).slice(0, max) : []);
 const positive = v => (Number.isInteger(v) && v > 0 ? v : null);
 const time = v => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v.slice(0, 40) : new Date().toISOString());
+
+// Where a memory came from: { how, by (who said it), origin (whom they said it came from), at (the message's number in
+// this brain) }. A how Kiori doesn't know makes the rest meaningless: no source at all
+function sourceOf(x) {
+    if (!isObject(x) || !HOW.includes(x.how)) return null;
+    const by = str(x.by, 120).trim(), origin = str(x.origin, 120).trim();
+    return { how: x.how, ...(by && { by }), ...(origin && { origin }), ...(positive(x.at) && { at: x.at }) };
+}
+// Who a world's item reaches: groups, and for an event when it happened (t0) and how it spreads. Kept, not used yet
+function audienceOf(a) {
+    if (!isObject(a)) return null;
+    const groups = strings(a.groups, 20, 60);
+    const spread = (Array.isArray(a.spread) ? a.spread : []).slice(0, 10).filter(isObject).map(x => ({ after: Number.isFinite(x.after) ? Math.max(0, x.after) : 0, groups: strings(x.groups, 20, 60) }));
+    return { ...(groups.length && { groups }), ...(Number.isFinite(a.t0) && { t0: a.t0 }), ...(spread.length && { spread }) };
+}
 
 // Meaning fingerprints travel as 256 signed bytes each (a few hundred characters of base64), so a brain stays small.
 // Embedding models that support it are asked for 256 numbers; longer vectors are cut to their first 256, which keeps
@@ -85,6 +105,16 @@ function memoryOf(m, ids) {
     if (positive(m.to)) out.to = Math.max(m.to, out.from ?? m.to);
     const links = strings(m.links, 8, 40);
     if (links.length) out.links = links;
+    // Provenance, and what was passed on (all optional: a brain from before them reads as it always did)
+    const source = sourceOf(m.source);
+    if (source) out.source = source;
+    if (m.confidence != null && Number.isFinite(Number(m.confidence))) out.confidence = clamp(m.confidence);
+    const toldTo = strings(m.told_to, 12, 120);
+    if (toldTo.length) out.told_to = toldTo;
+    if (typeof m.lie === 'boolean') out.lie = m.lie;
+    for (const [k, max] of [['said', 800], ['truth', 800], ['truth_ref', 40]]) { const v = str(m[k], max).trim(); if (v) out[k] = v; }
+    const audience = audienceOf(m.audience);
+    if (audience && Object.keys(audience).length) out.audience = audience;
     if (typeof m.v === 'string' && m.v) {
         out.v = m.v.slice(0, 400);
         if (typeof m.vh === 'string' && m.vh) out.vh = m.vh.slice(0, 16);
@@ -152,10 +182,13 @@ export function readBrain(input, label = 'brain') {
         .sort((a, b) => a[0] - b[0]).slice(-LIMITS.seen);
     const learned = Math.max(positive(chat.learned) ?? 0, seen.at(-1)?.[0] ?? 0);
     const undo = (Array.isArray(chat.undo) ? chat.undo : []).map(undoOf).filter(Boolean).sort((a, b) => a.from - b.from).slice(-LIMITS.undo);
+    // A world brain's role, and the groups a character belongs to: kept for the world brain to come
+    const role = str(input.role, 40).trim(), groups = strings(input.groups, 20, 60);
     const embedInfo = isObject(input.embed) && str(input.embed.model, 200) ? { model: str(input.embed.model, 200), dim: positive(input.embed.dim) ?? DIM } : null;
     return {
         kiori: VERSION, id: str(input.id, 40).trim() || newId('brn'), name, aliases: strings(input.aliases, 20, 120),
         pronouns: ['she', 'he', 'they'].includes(input.pronouns) ? input.pronouns : 'they', build: input.build === 'light' ? 'light' : 'full',
+        ...(role && { role }), ...(groups.length && { groups }),
         card: cardOf(input.card), personality: normalize(isObject(input.personality) ? input.personality : {}),
         memories, relations,
         state: { core: stateOf(input.state?.core), chat: stateOf(input.state?.chat) },

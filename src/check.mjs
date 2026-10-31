@@ -17,7 +17,7 @@ const SCHEMA = {
                 type: 'object',
                 properties: {
                     character: { type: 'string' },
-                    type: { type: 'string', enum: ['leak', 'contradiction', 'invented_past', 'unsupported'] },
+                    type: { type: 'string', enum: ['leak', 'contradiction', 'invented_past', 'unsupported', 'misattribution'] },
                     quote: { type: 'string', description: 'The exact words in the draft' },
                     why: { type: 'string' },
                 },
@@ -65,13 +65,14 @@ export async function checkReply(project, brains, body) {
     const lore = brains.map(b => b.card.lore).find(Boolean) ?? '';
     const r = await askJSON({
         role: 'auditor', project, op: 'check', schema: SCHEMA, maxTokens: 5000, temperature: 0.1,
-        prompt: `You check a draft reply in a story before it is shown. Each character below may know only what their block says: their memories, what they know for sure, and the recent messages they witnessed. A recent message nobody placed counts as witnessed only when the messages show the character was there (not when they had left, or it was said apart from them).
+        prompt: `You check a draft reply in a story before it is shown. Each character below may know only what their block says: their memories, what they know for sure, what they've been told (and by whom), and the recent messages they witnessed. A recent message nobody placed counts as witnessed only when the messages show the character was there (not when they had left, or it was said apart from them).
 
 Flag, for the characters listed only:
 - leak: they say, hint at, guess too precisely or act on something that happened in THIS story in a scene they were not in, or another person's private thing (a secret, a whisper, a confession) they never heard. A plausible general guess from what they saw is fine; the specific detail is not.
 - contradiction: they state something about the past that contradicts their memories.
 - invented_past: they go along with or add details to a shared past that isn't in their memories (the player may claim things; a claim is not a memory).
 - unsupported: a concrete claim about a past event in their own life (a name, a date, something that happened) that their memories contradict or clearly can't contain.
+- misattribution: they name a source their block doesn't give for something (who told them, where they heard it), or speak as an eyewitness of something they were only told.
 Do NOT flag: what a person in this world would know from their own life and position (who runs what, who someone is, the world's lore); opinions, estimates, rhetoric, threats, jokes; reactions, feelings, new actions; narration placing someone in the scene. When unsure, don't flag.
 
 If nothing is wrong, return {"issues": [], "fixed": ""}.

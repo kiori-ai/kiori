@@ -22,7 +22,7 @@ const { createProject, updateProject, authenticate, createKey, revokeKey, listKe
 const { askJSON, retryAfterMs, credentialsFor, providerUrl, fitSchema } = await import('../src/llm.mjs');
 const { run, now, db } = await import('../src/db.mjs');
 const { dbPath, config } = await import('../src/config.mjs');
-const { readBrain, readBrains, newBrain, addMemories, setRelation, getRelations, setState, getState, packVector, unpackVector, cosine, fingerprint, textHash, freshVector, LIMITS } = await import('../src/brainfile.mjs');
+const { readBrain, readBrains, newBrain, addMemories, setRelation, getRelations, setState, getState, packVector, unpackVector, cosine, fingerprint, textHash, freshVector, characterOf, LIMITS } = await import('../src/brainfile.mjs');
 const { createBrain } = await import('../src/create.mjs');
 const { recall, searchMemories, contextOf, embedMissing } = await import('../src/recall.mjs');
 const { organize, lineUp, rewind, eventsOf } = await import('../src/organize.mjs');
@@ -64,12 +64,20 @@ function answer(prompt) {
     if (memory) {
         const scenes = lines(prompt.slice(prompt.lastIndexOf('WAS IN:')));
         const quote = words(scenes[0].text).slice(0, 8).join(' ');
+        // A line that passes something on ("says", "said", "told me", a "rumor") is a fact. The fake claims it saw it,
+        // whoever spoke; names whom it came from ("Mira says": Mira; a rumor: Rook, named in the line or not); and is
+        // sure of it unless the line says "maybe". A line that opens on a name ("Ines, Mira says...") is also a told
+        // record, to that name, whoever spoke it
+        const passed = scenes.filter(s => /\b(says|said|told me|rumor)\b/.test(s.text));
+        const cite = s => words(s.text).slice(0, 10).join(' ');
         return {
             memories: [
                 { title: `${memory[1]} remembers ${scenes[0].text.slice(0, 30)}`, body: `I remember: ${scenes.map(s => s.text).join(' ')}`, keys: words(scenes[0].text).slice(0, 3), about: ['Leo'], importance: 0.7, emotion: 0.5, evidence: quote },
                 { title: 'Something made up', body: 'This never happened.', keys: [], about: [], importance: 0.5, emotion: 0.1, evidence: 'words nobody ever said in these scenes at all' },
             ],
-            facts: [], intentions: [], finished: [], forgot: [],
+            facts: passed.map(s => ({ about: 'Leo', fact: s.text, evidence: cite(s), how: 'saw', via: s.text.match(/\b([A-Z][a-z]+) (?:says|said)\b/)?.[1] ?? (/rumor/.test(s.text) ? 'Rook' : ''), confidence: /\bmaybe\b/.test(s.text) ? 0.2 : 1 })),
+            told: passed.filter(s => /^[A-Z][a-z]+,/.test(s.text)).map(s => ({ to: [s.text.match(/^([A-Z][a-z]+),/)[1]], said: s.text, lie: false, truth: '', evidence: cite(s) })),
+            intentions: [], finished: [], forgot: [],
             relations: [{ target: 'Leo', trust: 60, closeness: 40, respect: 50, resentment: 0, attraction: 0, note: 'A stranger who stayed.' }, { target: memory[1], trust: 99, closeness: 99, respect: 99, resentment: 0, attraction: 0, note: 'myself' }],
             state: { mood: 'curious', on_mind: ['the stranger'], wants: [] },
             card: { who: '', looks: '', personality: '', voice: '' },
@@ -83,6 +91,7 @@ function answer(prompt) {
     }
     if (/You check a draft reply/.test(prompt)) {
         const draft = prompt.slice(prompt.lastIndexOf('DRAFT:') + 6).split('\n\nReturn only JSON')[0].trim();
+        if (/Ines: .*Mira told me/.test(draft) && /### Ines[\s\S]*Tom (told them|said it in front of them)/.test(prompt)) return { issues: [{ character: 'Ines', type: 'misattribution', quote: 'Mira told me', why: 'Tom told her, not Mira.' }], fixed: draft.replace('Mira told me', 'Tom told me') };
         return /Rook: .*letter/.test(draft) && prompt.includes('### Rook')
             ? { issues: [{ character: 'Rook', type: 'leak', quote: 'the letter', why: 'He was never told about it.' }], fixed: draft.replace('the letter', 'something') }
             : { issues: [], fixed: '' };
@@ -673,6 +682,172 @@ test('organizing a group chat: each brain learns only the scenes it was in', asy
     assert.deepEqual(c.checked, ['Rook']);
     const fine = await checkReply(P, [mi], { draft: 'Mira: The lamp is lit.', messages: messages.slice(0, 2) });
     assert.equal(fine.ok, true);
+});
+
+// ---------- Who knows what: sources, gossip, placement ----------
+test('brain file: a v2.0.0 brain without sources loads unchanged, and sources survive a round trip', () => {
+    const file = fs.readFileSync(new URL('./fixtures/brain-v2.0.0.json', import.meta.url), 'utf8');
+    assert.equal(`${JSON.stringify(readBrain(file), null, 2)}\n`, file, 'byte for byte');
+    const old = JSON.parse(file);
+    old.role = 'world';
+    old.groups = ['harbor', 'town'];
+    old.memories.push(
+        { id: 'm_s1', kind: 'fact', title: 'Leo\'s father sank the Halcyon', body: 'Leo\'s father sank the Halcyon.', about: ['Leo'], importance: 0.7, emotion: 0.2, strength: 0.6, status: 'active', scope: 'chat', evidence: 'Mira says the new one father sank the Halcyon', from: 13, to: 24, source: { how: 'told', by: 'Tom', origin: 'Mira', at: 17 }, confidence: 0.62 },
+        { id: 'm_t1', kind: 'told', title: 'Told Ines', body: 'I told Ines.', about: ['Ines'], importance: 0.5, emotion: 0.2, strength: 0.5, status: 'active', scope: 'chat', told_to: ['Ines'], lie: true, said: 'home all night', truth: 'at the chapel', truth_ref: 'm_s1', source: { how: 'saw', at: 17 }, audience: { groups: ['*'], t0: 3, spread: [{ after: 1, groups: ['town'] }] } },
+        { id: 'm_x', title: 'Bad source', body: 'b', source: { how: 'telepathy', by: 'Tom' }, confidence: 7 },
+    );
+    const b = readBrain(JSON.parse(JSON.stringify(old)));
+    const again = readBrain(JSON.parse(JSON.stringify(b)));
+    assert.deepEqual(again, b, 'stable');
+    assert.deepEqual([b.role, b.groups], ['world', ['harbor', 'town']]);
+    const [fact, told, bad] = b.memories.slice(-3);
+    assert.deepEqual([fact.source, fact.confidence], [{ how: 'told', by: 'Tom', origin: 'Mira', at: 17 }, 0.62]);
+    assert.deepEqual([told.kind, told.told_to, told.lie, told.said, told.truth, told.truth_ref], ['told', ['Ines'], true, 'home all night', 'at the chapel', 'm_s1']);
+    assert.deepEqual(told.audience, { groups: ['*'], t0: 3, spread: [{ after: 1, groups: ['town'] }] });
+    assert.equal(bad.source, undefined, 'an unknown how drops the whole source');
+    assert.equal(bad.confidence, 1, 'clamped');
+    // The Obsidian export says where it came from
+    assert.match(exportObsidian(b).data.toString('utf8'), /source: "told by Tom, from Mira, message 17"/);
+});
+
+test('provenance: worked out from the quoted message, not the model; an origin the message never names is dropped; confidence follows the formula and can only be lowered', async () => {
+    let [mi, ines, tom] = await Promise.all(['Mira', 'Ines', 'Tom'].map(name => createBrain(P, { name, description: 'Of Saltmere.', depth: 'light' })));
+    setRelation(mi, { target: 'Tom', trust: 80 }, 'core');
+    setRelation(ines, { target: 'Tom', trust: 20 }, 'core');
+    const present = ['Mira', 'Ines', 'Tom'];
+    const messages = [
+        { id: 'p1', role: 'narrator', content: '*Rain hammers the harbor while the ferry bell rings twice.*', present },
+        { id: 'p2', role: 'assistant', name: 'Tom', content: 'the rumor on the docks is that the ferry stops running this winter.', present },
+        { id: 'p3', role: 'assistant', name: 'Tom', content: 'Ines says the lighthouse lamp was lit by someone else last night.', present },
+        { id: 'p4', role: 'assistant', name: 'Tom', content: 'maybe Ines said the ferry captain is leaving for good.', present },
+    ];
+    const r = await organize(P, [mi, ines, tom], false, { messages, player: 'Leo', now: true, hold: 0 });
+    [mi, ines, tom] = r.brains;
+    const facts = b => b.memories.filter(m => m.kind === 'fact').sort((a, c) => a.source.at - c.source.at).map(m => [m.source, m.confidence]);
+    // The fake says it "saw" every line; Tom's lines are heard from Tom all the same. Rook is never named: no origin
+    assert.deepEqual(facts(mi), [
+        [{ how: 'heard', by: 'Tom', at: 2 }, 0.78],
+        [{ how: 'heard', by: 'Tom', origin: 'Ines', at: 3 }, 0.64],
+        [{ how: 'heard', by: 'Tom', origin: 'Ines', at: 4 }, 0.2],
+    ]);
+    // Trusting Tom less, Ines believes him less; and she is no origin of her own knowledge
+    assert.deepEqual(facts(ines), [
+        [{ how: 'heard', by: 'Tom', at: 2 }, 0.58],
+        [{ how: 'heard', by: 'Tom', at: 3 }, 0.58],
+        [{ how: 'heard', by: 'Tom', at: 4 }, 0.2],
+    ]);
+    // His own lines are his own: nobody told him
+    assert.ok(facts(tom).every(([s]) => s.how === 'saw' && !s.by));
+    // A memory quoting narration was seen, at that message
+    const seen = mi.memories.find(m => m.kind === 'memory');
+    assert.deepEqual([seen.source, seen.confidence], [{ how: 'saw', at: 1 }, 1]);
+    // Solo: a memory quoting the player's line is heard from the player
+    const rin = (await organize(P, [await createBrain(P, { character_card: RIN, depth: 'light' })], true, { messages: chat(16), player: 'Leo' })).brain;
+    assert.deepEqual(rin.memories.find(m => m.kind === 'memory').source, { how: 'heard', by: 'Leo', at: 1 });
+});
+
+test('gossip: Tom tells Ines what Mira said; Ines knows it from Tom, from Mira, and Mira\'s own scene never reaches her; the teller keeps a told record only for listeners who were there', async () => {
+    let [mi, tom, ines] = await Promise.all(['Mira', 'Tom', 'Ines'].map(name => createBrain(P, { name, description: 'Of Saltmere.', depth: 'light' })));
+    const loft = ['Mira', 'Tom', 'Leo'], tavern = ['Tom', 'Ines', 'Leo'];
+    const messages = [
+        { id: 'g1', role: 'narrator', content: '*Evening at the net loft. Mira and Tom mend nets alone.*', present: loft },
+        { id: 'g2', role: 'assistant', name: 'Mira', content: 'Tom, listen: the new one father sank the Halcyon, I saw it in the harbor papers.', present: loft },
+        { id: 'g3', role: 'narrator', content: '*Later, at the tavern, Tom sits down by Ines with two mugs.*', present: tavern },
+        { id: 'g4', role: 'assistant', name: 'Tom', content: 'Ines, Mira says the new one father sank the Halcyon.', present: tavern },
+        { id: 'g5', role: 'assistant', name: 'Tom', content: 'Rook, Mira says the ferry stops running this winter.', present: tavern },
+    ];
+    const placing = chatCalls('Split it into scenes').length;
+    const r = await organize(P, [mi, tom, ines], false, { messages, player: 'Leo', now: true, hold: 0 });
+    [mi, tom, ines] = r.brains;
+    assert.equal(chatCalls('Split it into scenes').length, placing, 'presence was sent: nothing to place');
+    assert.deepEqual(r.placed, []);
+    const heard = ines.memories.find(m => m.kind === 'fact' && /Halcyon/.test(m.body));
+    assert.deepEqual(heard.source, { how: 'heard', by: 'Tom', origin: 'Mira', at: 4 }, 'at: its number in the brain, as chat.seen counts');
+    const saw = ines.memories.find(m => m.source?.how === 'saw');
+    assert.ok(heard.confidence < saw.confidence, `${heard.confidence} < ${saw.confidence}`);
+    assert.doesNotMatch(JSON.stringify(ines.memories), /papers|net loft/, 'Mira\'s own words never reach Ines');
+    // Tom told Ines (she was there); Rook wasn't there, so that record is dropped and counted. Ines's brain gets no told
+    // record of Tom's telling: it wasn't her line
+    const told = tom.memories.filter(m => m.kind === 'told');
+    assert.deepEqual(told.map(t => [t.told_to, t.lie, t.source]), [[['Ines'], false, { how: 'saw', at: 4 }]]);
+    assert.equal(r.learned.find(l => l.name === 'Tom').dropped.told, 1);
+    assert.equal(r.learned.find(l => l.name === 'Ines').dropped.told, 2);
+    assert.ok(!ines.memories.some(m => m.kind === 'told'));
+    // Recall lists hearsay apart, with its teller and its origin; what she saw stays "for sure"
+    const block = contextOf(ines, { player: 'Leo' }).text;
+    assert.match(block, /## What they've been told \(they know who told them, and say so\)\n- Ines, Mira says the new one father sank the Halcyon\. \(Tom said it in front of them; Tom said it came from Mira\. They half believe it\.\)/);
+    assert.match(block, /they name who told them and never speak as if they saw it/);
+    // Check: naming the wrong source is a misattribution, and the block it was judged on carries the source
+    const c = await checkReply(P, [tom, ines], { draft: 'Ines: Mira told me about the Halcyon herself.', messages, player: 'Leo' });
+    assert.deepEqual([c.ok, c.issues[0]?.type], [false, 'misattribution']);
+    assert.match(fake.calls.findLast(c => JSON.stringify(c.body).includes('You check a draft reply')).body.messages[0].content, /### Ines[\s\S]*Tom said it in front of them; Tom said it came from Mira/);
+    // Editing the line Tom told it in takes the record back with the rest of that pass
+    const edited = messages.map(m => (m.id === 'g4' ? { ...m, content: 'Ines, the beer here is flat tonight.' } : m));
+    const back = await organize(P, [tom], false, { messages: edited, player: 'Leo', now: true, hold: 0 });
+    assert.ok(!back.brains[0].memories.some(m => m.kind === 'told'));
+});
+
+test('recall: hearsay is listed apart with its teller, old facts stay "for sure", memory headers show the source, and a doubted memory ranks lower', () => {
+    const b = newBrain({ name: 'Ines' });
+    addMemories(b, [
+        { kind: 'fact', title: 'Old fact', body: 'The ferry is blue.', about: [] },
+        { kind: 'fact', title: 'Seen', body: 'The lamp went out at midnight.', about: [], source: { how: 'saw', at: 2 }, confidence: 1 },
+        { kind: 'fact', title: 'Rumor', body: 'The captain is leaving.', about: [], source: { how: 'told', by: 'Tom', at: 3 }, confidence: 0.4 },
+        { title: 'Tom at the tavern', body: 'Tom told me about the Marisol wreck.', keys: ['marisol'], about: ['Tom'], importance: 0.5, source: { how: 'told', by: 'Tom', origin: 'Mira', at: 4 }, confidence: 0.9 },
+    ], { scope: 'chat' });
+    const hits = searchMemories(b, 'the Marisol wreck', null);
+    const ctx = contextOf(b, { text: 'Marisol', hits });
+    assert.match(ctx.text, /## What they know for sure\n- The ferry is blue\.\n- The lamp went out at midnight\.\n\n/);
+    assert.match(ctx.text, /- The captain is leaving\. \(Tom told them\. They're not sure\.\)/);
+    assert.match(ctx.text, /### Tom at the tavern \(fading, told by Tom, from Mira\)/);
+    assert.deepEqual(ctx.facts.at(-1).source, { how: 'told', by: 'Tom', at: 3 });
+    assert.deepEqual(hits[0].source, { how: 'told', by: 'Tom', origin: 'Mira', at: 4 }, 'recall passes sources on');
+    const twin = newBrain({ name: 'Twin' });
+    addMemories(twin, [{ title: 'Doubted', body: 'The bell rang twice.', importance: 0.5, confidence: 0.1 }, { title: 'Believed', body: 'The bell rang twice.', importance: 0.5 }]);
+    assert.deepEqual(searchMemories(twin, 'bell', null).map(m => m.title), ['Believed', 'Doubted']);
+});
+
+test('organize: placement comes back as placed, and sending it back makes no placement call', async () => {
+    const make = () => Promise.all(['Ann Lee', 'Bo Chen'].map(name => createBrain(P, { name, description: 'Of the harbor.', depth: 'light' })));
+    const messages = [
+        { id: 'q1', role: 'system', content: 'You are a story.' },
+        { id: 'q2', role: 'user', content: 'Evening, both of you.' },
+        { id: 'q3', role: 'assistant', name: 'Ann Lee', content: 'The tide turns at nine tonight.' },
+        { role: 'assistant', name: 'Bo Chen', content: 'Then we row at ten.' },
+    ];
+    let placing = chatCalls('Split it into scenes').length;
+    const r = await organize(P, await make(), false, { messages, player: 'Leo', now: true, hold: 0 });
+    assert.equal(chatCalls('Split it into scenes').length - placing, 1);
+    // n is the message's place in the list sent (the system message counts); id when it has one
+    assert.deepEqual(r.placed, [
+        { id: 'q2', n: 2, present: ['Leo'], scene: 'here' },
+        { id: 'q3', n: 3, present: ['Ann Lee', 'Leo'], scene: 'here' },
+        { n: 4, present: ['Bo Chen', 'Leo'], scene: 'here' },
+    ]);
+    // Fresh brains, the same messages with what was placed sent back as present: learning, and no placement call
+    const back = messages.map((m, i) => ({ ...m, ...(r.placed.find(p => p.n === i + 1) && { present: r.placed.find(p => p.n === i + 1).present }) }));
+    placing = chatCalls('Split it into scenes').length;
+    const again = await organize(P, await make(), false, { messages: back, player: 'Leo', now: true, hold: 0 });
+    assert.equal(chatCalls('Split it into scenes').length, placing);
+    assert.deepEqual([again.placed, again.learned.length], [[], 2]);
+});
+
+test('placing: the cast in the prompt is only who the stretch can involve', async () => {
+    const cast = Array.from({ length: 40 }, (_, i) => characterOf(newBrain({ name: `Kestrel${i}`, build: 'light', card: { who: `Sailor number ${i}, ${'weathered and quiet '.repeat(6)}` } })));
+    const before = eventsOf([{ role: 'assistant', name: 'Kestrel5', content: 'I keep watch on the quay.', present: ['Kestrel5', 'Leo'] }], { player: 'Leo' });
+    const stretch = eventsOf([
+        { role: 'narrator', content: 'Kestrel3 and Kestrel17 haul the nets in.' },
+        { role: 'assistant', name: 'Kestrel28', content: 'Mind the rope.' },
+        { role: 'user', content: 'I lend a hand.' },
+    ], { player: 'Leo' }).map((e, i) => ({ ...e, n: i + 2 }));
+    await placeEvents(P, stretch, { before, characters: cast, player: 'Leo' });
+    const prompt = chatCalls('Split it into scenes').at(-1).body.messages[0].content;
+    const listed = prompt.slice(prompt.indexOf('KNOWN CHARACTERS:'), prompt.indexOf('STORY:'));
+    assert.deepEqual([...listed.matchAll(/^- (\S+):/gm)].map(m => m[1]).sort(), ['Kestrel17', 'Kestrel28', 'Kestrel3', 'Kestrel5']);
+    assert.ok(prompt.length < 3000, `${prompt.length} characters`);
+    // A small cast is listed whole: someone described but not named can still be found
+    await placeEvents(P, eventsOf([{ role: 'narrator', content: 'A tall stranger walks in.' }], { player: 'Leo' }), { characters: cast.slice(0, 3), player: 'Leo' });
+    assert.match(chatCalls('Split it into scenes').at(-1).body.messages[0].content, /- Kestrel0:[\s\S]*- Kestrel2:/);
 });
 
 test('sleep: near-duplicates merge, and a brain past what it holds forgets its faintest conversation memories', async () => {

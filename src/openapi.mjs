@@ -1,5 +1,6 @@
 // The API described as OpenAPI 3.1, served at /openapi.json: import it into Postman or Insomnia, or generate a
 // client in any language. Kept next to the routes (server.mjs); the prose reference is docs/api.md.
+import { KINDS, HOW } from './brainfile.mjs';
 const ref = name => ({ $ref: `#/components/schemas/${name}` });
 const str = (description, extra = {}) => ({ type: 'string', ...(description && { description }), ...extra });
 const int = (description, extra = {}) => ({ type: 'integer', ...(description && { description }), ...extra });
@@ -30,7 +31,7 @@ const schemas = {
     Brain: {
         ...obj({
             kiori: int('The brain file format: 1', { const: 1 }), id: str(), name: str(), aliases: arr(str()), pronouns: str(null, { enum: ['she', 'he', 'they'] }),
-            build: str(null, { enum: ['full', 'light'] }), card: obj({ who: str(), looks: str(), personality: str(), voice: str(), core: str(), description: str(), lore: str(), scenario: str(), first_message: str(), examples: str() }),
+            build: str(null, { enum: ['full', 'light'] }), role: str('Reserved for world brains'), groups: arr(str(), 'Reserved: the groups a character belongs to'), card: obj({ who: str(), looks: str(), personality: str(), voice: str(), core: str(), description: str(), lore: str(), scenario: str(), first_message: str(), examples: str() }),
             personality: { type: 'object', additionalProperties: int(null, { minimum: 0, maximum: 100 }), description: '41 values, 50 = an average person' },
             memories: arr(ref('Memory')), relations: arr(ref('Relation')),
             state: obj({ core: nul(ref('State')), chat: nul(ref('State')) }),
@@ -39,11 +40,14 @@ const schemas = {
         }, ['kiori', 'name'], 'A character\'s brain in one conversation. Kiori stores none: keep it as it comes back, and send it with each call.'),
     },
     Memory: obj({
-        id: str(), kind: str(null, { enum: ['memory', 'person', 'place', 'belief', 'feeling', 'secret', 'habit', 'skill', 'object', 'fact', 'intention', 'trait', 'mind', 'forgot'] }),
+        id: str(), kind: str('told: what they passed on to whom; lore and event are reserved for world brains', { enum: KINDS }),
         title: str(), body: str(), keys: arr(str()), about: arr(str()), importance: num(), emotion: num(), strength: num(),
         status: str(null, { enum: ['active', 'done'] }), scope: str('core: who they are; chat: learned in this conversation', { enum: ['core', 'chat'] }),
         evidence: str('The words from the chat it was learned from'), from: int(), to: int(), links: arr(str()), v: str('Its meaning fingerprint (base64)'),
+        source: ref('Source'), confidence: num('0-1, how much they believe it'), told_to: arr(str(), 'A told record: whom they told'), lie: bool('A told record: they knew it was false'),
+        said: str('A told record: what they said'), truth: str('A lie: the truth'), truth_ref: str('A lie: the memory that holds the truth'), audience: obj({}, [], 'Reserved for world brains'),
     }),
+    Source: obj({ how: str(null, { enum: HOW }), by: str('Who said it'), origin: str('Whom the teller said it came from'), at: int('The message it was learned from, numbered as chat.seen counts') }, ['how'], 'How they know it, worked out from the message its evidence is in'),
     Relation: obj({ target: str(), trust: nul(int()), closeness: nul(int()), respect: nul(int()), resentment: nul(int()), attraction: nul(int()), note: nul(str()) }),
     State: obj({ mood: nul(str()), on_mind: arr(str()), wants: arr(str()) }),
     ChatMessage: obj({
@@ -62,7 +66,7 @@ const schemas = {
     RecallInput: { allOf: [ref('OneOrMany'), obj({ messages: arr(ref('ChatMessage')), query: str('Recall for this instead of the last messages'), player: str(), budget: int('Characters of text per brain (default 6000)'), limit: int('Memories per brain (default 10)') })] },
     CharacterContext: obj({
         name: str(), text: str('A ready-to-use block for your prompt'), memories: arr(ref('Memory')), relations: arr(ref('Relation')), state: ref('State'),
-        facts: arr(obj({ about: arr(str()), fact: str() })), forgot: arr(str()), intentions: arr(str()), mind: arr(obj({})),
+        facts: arr(obj({ about: arr(str()), fact: str(), source: ref('Source'), confidence: num() })), forgot: arr(str()), intentions: arr(str()), mind: arr(obj({})),
     }),
     RecallResult: obj({ characters: arr(ref('CharacterContext')), text: str('The context, when one brain was sent'), check_recommended: bool('The player brought up the past: worth checking the reply') }),
     OrganizeInput: { allOf: [ref('OneOrMany'), obj({
@@ -71,13 +75,14 @@ const schemas = {
     }, ['messages'])] },
     OrganizeResult: obj({
         brain: ref('Brain'), brains: arr(ref('Brain')),
-        learned: arr(obj({ name: str(), from: int(), to: int(), messages: int(), written: int(), dropped: obj({ memories: int(), facts: int(), intentions: int(), forgot: int() }) })),
+        learned: arr(obj({ name: str(), from: int(), to: int(), messages: int(), written: int(), dropped: obj({ memories: int(), facts: int(), intentions: int(), forgot: int(), told: int('Told records whose listeners weren\'t there, or that weren\'t their own line') }) })),
         rewound: arr(obj({ name: str(), from: int(), forgot: int() }), 'Brains that unlearned what an edited, rerolled or deleted message taught'),
         waiting: int('Settled messages not learned yet'), held: int(), warnings: arr(str()),
+        placed: arr(obj({ id: str(), n: int('Its place in the messages sent, from 1'), present: arr(str()), scene: nul(str()) }), 'Messages Kiori placed in this call: send these back as their present, and they are never placed again'),
     }),
     CheckInput: { allOf: [ref('OneOrMany'), obj({ draft: str('The reply to check'), messages: arr(ref('ChatMessage')), player: str() }, ['draft'])] },
     CheckResult: obj({
-        ok: bool(), issues: arr(obj({ character: str(), type: str(null, { enum: ['leak', 'contradiction', 'invented_past', 'unsupported'] }), quote: str(), why: str() })),
+        ok: bool(), issues: arr(obj({ character: str(), type: str(null, { enum: ['leak', 'contradiction', 'invented_past', 'unsupported', 'misattribution'] }), quote: str(), why: str() })),
         fixed: str('The draft with only the problem lines changed'), checked: arr(str()),
     }),
     BrainKey: obj({ set: bool(), provider: str(), key: str('Its last four characters'), model: str(), base_url: str() }),

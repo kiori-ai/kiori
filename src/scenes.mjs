@@ -2,7 +2,7 @@
 // is that character and the player; in a group chat the organizer infers it, scene by scene, for the stretch being
 // learned. Everything about who knows what rests on this list.
 import { askJSON } from './llm.mjs';
-import { findCharacter, characterNamed, namesPlayer, sameCharacter, whoIs, norm, bareName } from './text.mjs';
+import { findCharacter, characterNamed, namesPlayer, sameCharacter, whoIs, norm, bareName, mentions } from './text.mjs';
 
 const SCHEMA = {
     type: 'object',
@@ -72,9 +72,17 @@ export function placementChunks(events, { maxEvents = 60, maxChars = 40000 } = {
 
 // Fills in who was there for the messages that don't say. Messages are numbered by their place in the call (n);
 // before: a few messages before the stretch, for context. characters: the brains' characters.
+// A small cast is listed whole (so someone described but not named is still found); a bigger one only by who the
+// piece can involve: those named in it or in its context, and those present in its context. So the prompt grows with
+// the scene, not the cast.
+const WHOLE_CAST = 8;
 export async function placeEvents(project, events, { before = [], characters = [], player = 'Player' } = {}) {
     if (!events.some(e => !e.present)) return 0;
-    const cast = characters.map(c => `- ${c.name}${c.aliases?.length ? ` (also: ${c.aliases.join(', ')})` : ''}: ${[c.card?.who, c.card?.looks].filter(Boolean).join(' / ').slice(0, 260)}`).join('\n');
+    const castFor = shown => {
+        const text = shown.map(e => eventLine(e, e.n)).join('\n'), there = new Set(shown.flatMap(e => e.present ?? []).map(n => whoIs(n, { story: characters, player })));
+        return characters.filter(c => characters.length <= WHOLE_CAST || there.has(c) || mentions(text, c))
+            .map(c => `- ${c.name}${c.aliases?.length ? ` (also: ${c.aliases.join(', ')})` : ''}: ${[c.card?.who, c.card?.looks].filter(Boolean).join(' / ').slice(0, 260)}`).join('\n');
+    };
     const all = [...before, ...events];
     let done = 0;
     for (const chunk of placementChunks(events)) {
@@ -82,6 +90,7 @@ export async function placeEvents(project, events, { before = [], characters = [
         const from = chunk[0].n, to = chunk.at(-1).n;
         // A little context before each piece, so a scene that started earlier is understood
         const shown = [...all.filter(e => e.n < from).slice(-4), ...chunk];
+        const cast = castFor(shown);
         const r = await askJSON({
             role: 'organizer', project, op: 'scenes', schema: SCHEMA, maxTokens: 4000, temperature: 0.1,
             // An answer that places nobody is asked again (the last time on the fallback model); if it still does, the
