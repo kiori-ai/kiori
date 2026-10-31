@@ -128,6 +128,8 @@ pre .k { color: #f2c75c; } pre .s { color: #9fe0b5; } pre .c { color: #7f8bb3; }
 .usage { margin: 22px 0 0; font-size: 12.5px; color: var(--ink-3); text-align: center; }
 
 .login { max-width: 440px; margin: 9vh auto 0; }
+.foot { padding: 0 24px 32px; text-align: center; }
+.foot a { color: inherit; }
 .login .card { padding: 26px; }
 .login h1 { font-size: 38px; }
 .login p { color: var(--ink-2); }
@@ -159,6 +161,7 @@ pre .k { color: #f2c75c; } pre .s { color: #9fe0b5; } pre .c { color: #7f8bb3; }
   <nav id="nav"></nav>
 </header>
 <main id="app"></main>
+<footer class="foot small muted"><a href="/terms">Beta terms</a> · <a href="/privacy">Privacy policy</a></footer>
 
 <script>
 const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -244,9 +247,9 @@ function renderLogin() {
   nav(null);
   $('#app').innerHTML = `<div class="login"><div class="card">
     <h1>Kiori <em>console</em></h1>
-    <p>Sign in with the link you were sent, or paste your Kiori key.</p>
+    <p>Sign in with your sign-in link, or paste your Kiori key.</p>
     <form id="login"><input class="mono-in" id="key" placeholder="kio_..." autocomplete="off" aria-label="Kiori key"><button class="btn pri">Sign in</button></form>
-    <p class="small muted" style="margin-top:16px">No key yet? <a href="https://kiori.io/#access">Ask for access</a>.</p>
+    <p class="small muted" style="margin-top:16px">No project yet? <a href="https://kiori.io/#access">Get access</a> on kiori.io.</p>
     <details class="small muted"><summary>Running this Kiori?</summary><form id="admin"><input class="mono-in" id="adminkey" placeholder="kia_... (data/local/admin.key)" autocomplete="off" aria-label="Admin key"><button class="btn">Sign in as admin</button></form></details>
   </div></div>`;
   // The key is checked before it's kept, once at a time; only a 401 means the key itself is wrong
@@ -491,7 +494,7 @@ async function renderAdmin() {
   catch (e) { toast(e.message); location.hash = ''; return render(); }
   $('#app').innerHTML = `<div class="hero" style="grid-template-columns:1fr"><div><h1>Running <em>Kiori</em></h1><p class="lede">How it’s used, week by week, and who asked for access. Counts only: nothing that was said.</p></div></div>
   ${statsCard(stats)}
-  <section class="card"><div class="card-h"><h2>Access requests</h2></div><p class="muted small">From the form on kiori.io. Approving makes their project, on their own brain API key, and a sign-in link to send them.</p><div class="tbl"><table><thead><tr><th>When</th><th>Who</th><th>What they're building</th><th></th></tr></thead><tbody>
+  <section class="card"><div class="card-h"><h2>Access requests</h2></div><p class="muted small">From the form on kiori.io. Each one makes its project at once, on their own brain API key, and shows them its sign-in link. A request still waiting from before needs Approve, which makes the project and a link to send them.</p><div class="tbl"><table><thead><tr><th>When</th><th>Who</th><th>What they're building</th><th></th></tr></thead><tbody>
   ${list.map(r => `<tr><td class="small muted">${when(r.created_at)}</td><td class="wrap"><b style="font-weight:500">${h(r.name || r.email)}</b><span class="muted small" style="display:block">${h([r.company, r.email].filter(Boolean).join(' · '))}</span></td><td class="wrap small" style="max-width:340px">${h(r.use_case)}</td>
     <td class="r" data-row="${h(r.id)}">${r.status === 'pending' ? `<button class="btn sm quiet" data-decline="${h(r.id)}">Decline</button> <button class="btn sm pri" data-approve="${h(r.id)}">Approve</button>` : `<span class="tag ${r.status === 'approved' ? 't-ok' : 't-gray'}">${h(r.status)}</span>${r.status === 'approved' && r.project_id ? ` <button class="btn sm quiet" data-relink="${h(r.project_id)}">New link</button>` : ''}`}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No requests yet.</td></tr>'}
   </tbody></table></div></section>`;

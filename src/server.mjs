@@ -81,12 +81,13 @@ const BRAINS = { maxBody: 24e6 };
 
 // ---------- Admin ----------
 route('GET', '/v1/admin/projects', () => listProjects().map(publicProject), { admin: true });
-// Asking for access (the site's form; no key needed): a few per address an hour, a few hundred a day in all
+// Asking for access (the site's form; no key needed): it makes the project at once and answers with its sign-in link.
+// A few per address an hour, a few hundred projects a day in all
 route('POST', '/v1/access', ctx => {
     if (!allow(`access:${ctx.ip}`, 5, 3600000)) fail(429, 'Too many requests for access from here: try again later', 'RATE_LIMITED');
     return requestAccess(ctx.body, ctx.ip, () => allow('access:all', 300, 86400000));
 }, { open: true });
-// The admin answers them; approving makes the customer's project and a sign-in link to send them
+// The admin's list of them; approving is for a request left waiting from before the form made projects itself
 route('GET', '/v1/admin/access', () => listRequests(), { admin: true });
 route('POST', '/v1/admin/access/:id/approve', ({ params }) => approve(params.id), { admin: true });
 route('POST', '/v1/admin/access/:id/decline', ({ params }) => decline(params.id), { admin: true });
@@ -183,6 +184,8 @@ async function handle(req, res) {
         const page = docsPage(p === '/docs' ? 'overview' : decode(p.slice(6)));
         return page ? send(res, 200, page) : send(res, 404, 'Not found');
     }
+    // The beta terms and the privacy policy, pages like the docs
+    if (req.method === 'GET' && (p === '/terms' || p === '/privacy')) return send(res, 200, docsPage(p.slice(1)));
     if (p === '/health') return send(res, 200, { ok: true, name: 'kiori', version: VERSION });
     // The SDKs, and the SillyTavern extension as a zip (unzipped into SillyTavern's extensions folder, it's a folder "kiori")
     if (req.method === 'GET' && /^\/sdk\/kiori\.(mjs|py|d\.ts)$/.test(p)) return send(res, 200, fs.readFileSync(path.join(ROOT, p)), { 'Content-Type': `${p.endsWith('.mjs') ? 'text/javascript' : 'text/plain'}; charset=utf-8`, 'Cache-Control': 'public, max-age=300' });

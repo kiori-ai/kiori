@@ -125,7 +125,7 @@ The brain API key is never shown back, only its provider and last four character
 | | |
 |---|---|
 | `GET /v1/personality` | The 41 personality dimensions and the archetypes. |
-| `POST /v1/access` | Asks for access: `{ "email", "name", "company", "use_case" }`. |
+| `POST /v1/access` | Asks for access: `{ "email", "name", "company", "use_case" }`. A valid request makes your project at once and gives `{ "ok", "link", "expires_at", "project": { "id", "name" } }`: `link` signs you in to the console, once, within 7 days. The same email again gives a new link to the same project while nobody has signed in to it yet, and `409` `CONFLICT` once someone has. |
 | `POST /v1/signin` | Trades a sign-in link's one-time token for a Kiori key: `{ "token": "kis_..." }` gives `{ "key", "project": { "id", "name" } }`. The console does this when a link opens. A used or expired token gives `401` `LINK_EXPIRED`. |
 | `GET /health` | `{ "ok", "name", "version" }`. |
 
@@ -141,6 +141,7 @@ Every error is `{ "error": { "message", "code", "request_id" } }`.
 | 403 | `FORBIDDEN` | A key your app uses tried to change the project: that takes an owner key. |
 | 402 | `NEEDS_KEY`, `BAD_KEY`, `CREDITS` | Your brain API key is missing, refused by your provider, or out of credits. |
 | 404 | `NOT_FOUND` | No such endpoint. |
+| 409 | `CONFLICT` | A project already has the most keys it may have; or, asking for access, the email's project is one someone has signed in to. |
 | 413 | `TOO_LARGE` | The body is over the limit. |
 | 429 | `RATE_LIMITED` | Too many calls; `Retry-After` says when to try again. |
 | 502 | `PROVIDER`, `INCOMPLETE` | Your model provider failed, after Kiori tried again. `INCOMPLETE`: the model's answers stayed unusable after Kiori's own tries (the SDKs don't ask again). |

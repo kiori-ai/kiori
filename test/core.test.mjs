@@ -1002,18 +1002,39 @@ test('SillyTavern extension: a brain on the first reply, its mind in the prompt,
     }
 });
 
-test('access: the site form leaves a request; the admin approves it into a project on its own key, with a sign-in link', async () => {
+test('access: the site form makes the project at once, on its own key, and answers with a sign-in link; one left waiting from before, the admin approves', async () => {
     const { setAdminKey } = await import('../src/config.mjs');
     setAdminKey('kia_test_admin_key_for_the_suite');
     const { startServer } = await import('../src/server.mjs');
     const server = startServer(0); await new Promise(r => server.once('listening', r));
     const base = `http://127.0.0.1:${server.address().port}`;
-    const post = (p, body, headers = {}) => fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body ?? {}) });
+    // Each part of this test asks from an address of its own (as the proxy on this machine says), so the hourly limit per
+    // address is met only where it's meant to be
+    const post = (p, body, headers = {}) => fetch(base + p, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '203.0.113.10', ...headers }, body: JSON.stringify(body ?? {}) });
+    const from = ip => ({ 'X-Forwarded-For': ip });
     const admin = { 'X-Admin-Key': 'kia_test_admin_key_for_the_suite' };
+    const projects = () => db.prepare('SELECT COUNT(*) AS n FROM projects').get().n;
     try {
         assert.equal((await post('/v1/access', { email: 'not an email' })).status, 400);
-        assert.equal((await post('/v1/access', { email: 'Bot@Example.com', website: 'http://spam' })).status, 200);
-        assert.equal((await post('/v1/access', { email: 'Ana@Studio.example', name: 'Ana', company: 'Moon Studio', use_case: 'NPCs that remember' })).status, 200);
+        // The bot field: an answer like any other, and nothing kept or made
+        const before = projects();
+        const bot = await post('/v1/access', { email: 'Bot@Example.com', website: 'http://spam' });
+        assert.equal(bot.status, 200);
+        assert.deepEqual(await bot.json(), { ok: true });
+        assert.equal(projects(), before);
+        const res = await post('/v1/access', { email: 'Ana@Studio.example', name: 'Ana', company: 'Moon Studio', use_case: 'NPCs that remember' });
+        assert.equal(res.status, 200);
+        const ok = await res.json();
+        // The link holds a one-time token, never a key; the project has no key until someone signs in
+        assert.equal(ok.key, undefined);
+        assert.match(ok.link, /^https:\/\/kiori\.test\/console#signin=kis_[\w-]{32}$/);
+        assert.ok(Date.parse(ok.expires_at) - Date.now() > 6.9 * 864e5);
+        assert.equal(ok.project.name, 'Moon Studio');
+        assert.equal(projects(), before + 1);
+        const made = db.prepare('SELECT llm_mode, settings FROM projects WHERE id = ?').get(ok.project.id);
+        assert.equal(made.llm_mode, 'own');
+        assert.equal(JSON.parse(made.settings).contact, 'ana@studio.example');
+        assert.equal(db.prepare('SELECT COUNT(*) AS n FROM api_keys WHERE project_id = ?').get(ok.project.id).n, 0);
         const warn = console.warn, notes = [];
         console.warn = (...a) => notes.push(a.join(' '));
         try {
@@ -1022,40 +1043,86 @@ test('access: the site form leaves a request; the admin approves it into a proje
         } finally { console.warn = warn; }
         assert.ok(notes.some(n => n.includes('security  an admin endpoint without the admin key')) && notes.some(n => n.includes('security  a wrong admin key')), notes.join('\n'));
         assert.ok(!notes.some(n => /127\.0\.0\.1|kia_not_the_key/.test(n)), 'no address and no key in the log');
+        // The request is kept, approved, with its project
         const list = await (await fetch(`${base}/v1/admin/access`, { headers: admin })).json();
-        assert.deepEqual(list.map(r => r.email), ['ana@studio.example']);
-        const ok = await (await post(`/v1/admin/access/${list[0].id}/approve`, {}, admin)).json();
-        // The link holds a one-time token, never a key; approving makes no key at all
-        assert.equal(ok.key, undefined);
-        assert.match(ok.link, /^https:\/\/kiori\.test\/console#signin=kis_[\w-]{32}$/);
-        assert.ok(Date.parse(ok.expires_at) - Date.now() > 6.9 * 864e5);
-        assert.equal(ok.project.llm_mode, 'own');
-        assert.equal(db.prepare('SELECT COUNT(*) AS n FROM api_keys WHERE project_id = ?').get(ok.project.id).n, 0);
+        assert.deepEqual(list.map(r => [r.email, r.status, r.project_id]), [['ana@studio.example', 'approved', ok.project.id]]);
+        assert.ok(list[0].decided_at);
         assert.equal((await post(`/v1/admin/access/${list[0].id}/approve`, {}, admin)).status, 409);
+        // The same email again before anyone signed in (the link got lost): a new link to the same project, which
+        // undoes the first; no second project and no second request
+        const again = await (await post('/v1/access', { email: 'ana@studio.example' }, from('203.0.113.11'))).json();
+        assert.equal(again.project.id, ok.project.id);
+        assert.notEqual(again.link, ok.link);
+        assert.equal(projects(), before + 1);
+        assert.equal(db.prepare('SELECT COUNT(*) AS n FROM access_requests WHERE email = ?').get('ana@studio.example').n, 1);
+        assert.equal((await post('/v1/signin', { token: ok.link.split('#signin=')[1] })).status, 401);
         // Opening it: the token for a key of the browser's own, once
-        const token = ok.link.split('#signin=')[1];
+        const token = again.link.split('#signin=')[1];
         const signed = await (await post('/v1/signin', { token })).json();
         assert.match(signed.key, /^kio_/);
         assert.deepEqual(signed.project, { id: ok.project.id, name: 'Moon Studio' });
-        const again = await post('/v1/signin', { token });
-        assert.equal(again.status, 401);
-        assert.equal((await again.json()).error.code, 'LINK_EXPIRED');
+        const used = await post('/v1/signin', { token });
+        assert.equal(used.status, 401);
+        assert.equal((await used.json()).error.code, 'LINK_EXPIRED');
         assert.equal((await post('/v1/signin', { token: 'kis_made_up_token_that_was_never_issued' })).status, 401);
         const me = await (await fetch(`${base}/v1/project`, { headers: { Authorization: `Bearer ${signed.key}` } })).json();
         assert.deepEqual(me.llm, { set: false });
         assert.deepEqual(me.keys.map(k => k.label), ['console']);
+        // Once someone has signed in, the form hands out nothing for that email: typing someone's email in mustn't sign
+        // anyone in to their project. The admin can still make a new link.
+        const taken = await post('/v1/access', { email: 'ANA@studio.example', company: 'Not Moon' }, from('203.0.113.11'));
+        assert.equal(taken.status, 409);
+        const body = await taken.json();
+        assert.equal(body.error.code, 'CONFLICT');
+        assert.equal(body.link, undefined);
+        assert.equal(projects(), before + 1);
+        // The same for a project the admin made with that email as its contact
+        createProject('Made by hand', { contact: 'Lee@Hand.example' });
+        assert.equal((await post('/v1/access', { email: 'lee@hand.example' }, from('203.0.113.11'))).status, 409);
         // A link past its date opens nothing; the admin can make a new one
         const late = await (await post(`/v1/admin/projects/${ok.project.id}/signin`, {}, admin)).json();
         run('UPDATE signins SET expires_at = ? WHERE hash = ?', new Date(Date.now() - 1000).toISOString(), sha(late.link.split('#signin=')[1]));
         assert.equal((await post('/v1/signin', { token: late.link.split('#signin=')[1] })).status, 401);
         assert.equal((await post('/v1/admin/projects/prj_nobody/signin', {}, admin)).status, 404);
+        // Requests left waiting from before: the admin approves one into its project and link; the form, sent again
+        // with the same email, approves the other with what was written this time
+        for (const [id, email] of [['acc_waiting_admin', 'old.one@x.example'], ['acc_waiting_form', 'old.two@x.example']])
+            run('INSERT INTO access_requests (id, email, name, company, use_case, created_at) VALUES (?, ?, ?, ?, ?, ?)', id, email, 'Old', '', 'from before', now());
+        const approved = await (await post('/v1/admin/access/acc_waiting_admin/approve', {}, admin)).json();
+        assert.match(approved.link, /#signin=kis_/);
+        assert.equal(approved.project.llm_mode, 'own');
+        assert.equal((await post('/v1/admin/access/acc_waiting_admin/approve', {}, admin)).status, 409);
+        const waited = await (await post('/v1/access', { email: 'old.two@x.example', company: 'Two Co' }, from('203.0.113.12'))).json();
+        assert.equal(waited.project.name, 'Two Co');
+        assert.deepEqual({ ...db.prepare("SELECT status, project_id, name, use_case FROM access_requests WHERE id = 'acc_waiting_form'").get() }, { status: 'approved', project_id: waited.project.id, name: 'Old', use_case: 'from before' });
         // The admin endpoints answer this origin only: no CORS
         const pre = await fetch(`${base}/v1/admin/access`, { method: 'OPTIONS' });
         assert.equal(pre.headers.get('access-control-allow-origin'), null);
         assert.equal((await fetch(`${base}/v1/project`, { method: 'OPTIONS' })).headers.get('access-control-allow-origin'), '*');
-        for (let i = 0; i < 3; i++) await post('/v1/access', { email: `more${i}@x.example` });
-        assert.equal((await post('/v1/access', { email: 'one.too.many@x.example' })).status, 429);
+        // A few an hour from one address
+        for (let i = 0; i < 5; i++) assert.equal((await post('/v1/access', { email: `more${i}@x.example` }, from('203.0.113.13'))).status, 200);
+        assert.equal((await post('/v1/access', { email: 'one.too.many@x.example' }, from('203.0.113.13'))).status, 429);
     } finally { server.close(); }
+});
+
+test('access: a day with no room left makes no project; what is turned away never uses up the day', async () => {
+    const { requestAccess } = await import('../src/access.mjs');
+    const projects = () => db.prepare('SELECT COUNT(*) AS n FROM projects').get().n;
+    const before = projects();
+    let asked = 0;
+    const full = () => { asked++; return false; };
+    assert.throws(() => requestAccess({ email: 'late@day.example' }, '198.51.100.1', full), e => e.status === 429 && e.code === 'RATE_LIMITED');
+    assert.equal(asked, 1);
+    assert.equal(projects(), before);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM access_requests WHERE email = ?').get('late@day.example').n, 0);
+    // A bot, a bad email and an email whose project waits for its first sign-in don't ask for room
+    const room = () => { asked++; return true; };
+    const first = requestAccess({ email: 'early@day.example' }, '198.51.100.1', room);
+    assert.equal(asked, 2);
+    assert.deepEqual(requestAccess({ email: 'x@y.example', website: 'spam' }, null, full), { ok: true });
+    assert.throws(() => requestAccess({ email: 'nope' }, null, full), e => e.status === 400);
+    assert.equal(requestAccess({ email: 'early@day.example' }, null, full).project.id, first.project.id);
+    assert.equal(asked, 2);
 });
 
 // ---------- Security ----------
@@ -1191,6 +1258,16 @@ test('pages and answers: protective headers, a script policy made from each page
         const docs = await fetch(`${base}/docs/security`);
         assert.equal(docs.status, 200);
         assert.match(await docs.text(), /Security/);
+        // The beta terms and the privacy policy, with their facts filled in and nothing left to fill but the lawyer's note
+        for (const [p, title] of [['/terms', 'Kiori Beta Terms'], ['/privacy', 'Kiori Privacy Policy']]) {
+            const legal = await fetch(base + p);
+            assert.equal(legal.status, 200);
+            assert.match(legal.headers.get('content-security-policy'), /script-src 'none'/);
+            const text = await legal.text();
+            assert.ok(text.includes(`<h1 id=`) && text.includes(title) && text.includes('Aras Aktaş') && text.includes('not yet reviewed by a lawyer'), p);
+            assert.ok(!text.includes('{{'), p);
+            assert.deepEqual(text.match(/\[[^\]<]*\]/g)?.map(m => m.slice(1, 30).toLowerCase()), ['to be completed with a lawyer'], p);
+        }
         assert.equal((await fetch(`${base}/v1/project`, { headers: { Authorization: `Bearer ${own.key}` } })).headers.get('cache-control'), 'no-store');
         const nope = await (await fetch(`${base}/v1/project`)).json();
         assert.match(nope.error.request_id, /^[0-9a-f]{12}$/);
@@ -1329,6 +1406,11 @@ test('kiori site: --out clears only an empty folder or an earlier build, never o
     fs.writeFileSync(path.join(out, 'stale.html'), 'old');
     buildSite(out);
     assert.ok(fs.existsSync(path.join(out, '_headers')) && !fs.existsSync(path.join(out, 'stale.html')));
+    // The beta terms and the privacy policy are pages of the site too, linked from the landing page and the access form
+    for (const f of ['terms.html', 'privacy.html']) assert.match(fs.readFileSync(path.join(out, f), 'utf8'), /not yet reviewed by a lawyer/);
+    const landing = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+    assert.ok(landing.includes('<a href="/terms">beta terms</a> and the <a href="/privacy">privacy policy</a>') && landing.includes('<a href="/privacy">privacy</a>'));
+    assert.match(fs.readFileSync(path.join(out, '_headers'), 'utf8'), /^\/privacy\n  Content-Security-Policy: default-src 'none'; script-src 'none'/m);
     fs.rmSync(dir, { recursive: true, force: true });
 });
 

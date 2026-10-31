@@ -326,6 +326,10 @@ p { color: var(--ink-2); }
 .access button.btn:disabled { opacity: .6; cursor: default; }
 .access .msg { font-size: 13px; color: var(--ink-2); }
 .access small { display: block; margin-top: 14px; font-size: 12px; color: var(--ink-3); }
+.access .done { margin-top: 16px; padding: 14px 16px; border-radius: 8px; background: var(--note); }
+.access .done[hidden] { display: none; }
+.access .done p { margin: 0 0 8px; color: var(--ink); }
+.access .done .go { display: block; margin-bottom: 10px; font: 400 12.5px/1.5 var(--mono); overflow-wrap: anywhere; }
 
 /* the end: the sticker between a pair of wings, everything on one centre line */
 .end { color: #fff; text-align: center; padding-block: 100px 30px; padding-left: max(var(--gut), env(safe-area-inset-left, 0px)); padding-right: max(var(--gut), env(safe-area-inset-right, 0px)); background-color: var(--cobalt); background-image: radial-gradient(rgba(255, 255, 255, .075) 1px, transparent 1.5px), linear-gradient(180deg, var(--cobalt) 0%, #1a4aa6 55%, var(--night) 100%); background-size: 7px 7px, auto; clip-path: inset(-30px 0 0 0); }
@@ -427,8 +431,8 @@ p { color: var(--ink-2); }
       <span class="tag">✦ brains for characters</span>
       <h1>Give every character a mind of <em>their own.</em></h1>
       <p>Kiori gives each of your characters a brain: what they remember, what they never saw, who they love, what they hide. Your app keeps the chat, the model and the brains. We store no brains and no chats.</p>
-      <div class="cta"><a class="btn solid" href="#access">Request access</a><a class="btn ghost" href="#mind">Watch a mind think ↓</a></div>
-      <span class="scribble">free while we're in private beta <i class="star5"></i></span>
+      <div class="cta"><a class="btn solid" href="#access">Get access</a><a class="btn ghost" href="#mind">Watch a mind think ↓</a></div>
+      <span class="scribble">free while we're in beta <i class="star5"></i></span>
     </div>
     <div class="art-wrap">
       <div class="art">
@@ -646,7 +650,7 @@ p { color: var(--ink-2); }
         <figcaption>every star is a memory <i class="star5"></i></figcaption>
       </figure>
       <div class="tier" style="--r:.8deg">
-        <span class="badge">private<br>beta</span>
+        <span class="badge">free<br>beta</span>
         <span class="name">Beta</span>
         <span class="price">$0</span>
         <span class="per">while the beta lasts</span>
@@ -657,19 +661,20 @@ p { color: var(--ink-2); }
           <li>JavaScript and Python SDKs, and a SillyTavern extension</li>
           <li>A direct line to us: what you tell us shapes what we build</li>
         </ul>
-        <div class="cta"><a class="btn ink" href="#access">Request access</a><a class="btn line" href="mailto:help@kiori.io?subject=Kiori">Contact us</a></div>
+        <div class="cta"><a class="btn ink" href="#access">Get access</a><a class="btn line" href="mailto:help@kiori.io?subject=Kiori">Contact us</a></div>
       </div>
     </div>
     <form class="access" id="access" data-r="3" novalidate>
-      <span class="kicker">private beta</span>
-      <h3>Ask for access</h3>
-      <p>Tell us what you're building and we'll email you a sign-in link. You bring your own model key (OpenRouter, OpenAI or Gemini) and pay your provider directly.</p>
+      <span class="kicker">free beta</span>
+      <h3>Get access</h3>
+      <p>Tell us what you're building and your project is made right away: this page gives you a sign-in link to the console. You bring your own model key (OpenRouter, OpenAI or Gemini) and pay your provider directly.</p>
       <div class="two"><div><label for="a-email">Email</label><input id="a-email" name="email" type="email" required autocomplete="email"></div><div><label for="a-name">Name</label><input id="a-name" name="name" autocomplete="name"></div></div>
       <label for="a-company">Company or project</label><input id="a-company" name="company" autocomplete="organization">
       <label for="a-use">What are you building?</label><textarea id="a-use" name="use_case" placeholder="A character chat app, a game with NPCs that remember, interactive fiction…"></textarea>
       <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
-      <div class="send"><button class="btn ink" type="submit">Request access</button><span class="msg" role="status"></span></div>
-      <small>We use what you write here only to answer your request. Rather write to us? <a href="mailto:help@kiori.io?subject=Kiori">help@kiori.io</a></small>
+      <div class="send"><button class="btn ink" type="submit">Get access</button><span class="msg" role="status"></span></div>
+      <div class="done" hidden><p>Your project is ready. Open this link in the browser you'll use for the console. It works once and for 7 days.</p><a class="go" href="#"></a><button class="btn line" type="button">Copy link</button></div>
+      <small>By asking for access you agree to the <a href="/terms">beta terms</a> and the <a href="/privacy">privacy policy</a>. Rather write to us? <a href="mailto:help@kiori.io?subject=Kiori">help@kiori.io</a></small>
     </form>
     <p class="fine" data-r="3">What comes after the beta isn't decided yet. Beta projects hear first, well before anything changes.</p>
   </div>
@@ -685,11 +690,11 @@ p { color: var(--ink-2); }
     <span class="hand" data-r="1">i'll keep their secrets <i class="star5"></i></span>
     <h2 data-r="1">Let them <em>remember.</em></h2>
     <p data-r="2">Free during the beta, three calls to wire in, and their secrets stay theirs.</p>
-    <div class="cta" data-r="2"><a class="btn solid" href="#access">Request access</a><a class="btn ghost" href="/docs">Read the docs</a></div>
+    <div class="cta" data-r="2"><a class="btn solid" href="#access">Get access</a><a class="btn ghost" href="/docs">Read the docs</a></div>
   </div>
   <div class="foot">
     <a class="logo" href="/"><span class="halo"></span>kiori</a>
-    <nav><a href="/docs">docs</a><a href="/docs/integration">integration</a><a href="/docs/api">api</a><a href="/docs/security">security</a><a href="https://github.com/kiori-ai/kiori">github</a><a href="mailto:help@kiori.io">contact</a><a href="/console">sign in</a></nav>
+    <nav><a href="/docs">docs</a><a href="/docs/integration">integration</a><a href="/docs/api">api</a><a href="/docs/security">security</a><a href="https://github.com/kiori-ai/kiori">github</a><a href="mailto:help@kiori.io">contact</a><a href="/terms">terms</a><a href="/privacy">privacy</a><a href="/console">sign in</a></nav>
     <small>© 2026 kiori · brains for characters</small>
   </div>
 </footer>
@@ -719,7 +724,15 @@ p { color: var(--ink-2); }
       const r = await fetch('/v1/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       if (r.status === 429) throw new Error('Too many requests from here. Please try again later.');
       if (!r.ok) throw new Error((await r.json().catch(() => null))?.error?.message || 'Something went wrong. Please try again.');
-      f.reset(); msg.textContent = "Thanks! We'll email you a sign-in link soon.";
+      // The answer carries the project's one-time sign-in link: shown here, since nothing is emailed
+      const { link } = await r.json().catch(() => ({}));
+      f.reset(); msg.textContent = 'Thanks!';
+      if (/^https?:\/\//.test(link || '')) {
+        const done = f.querySelector('.done'), go = done.querySelector('.go'), copy = done.querySelector('button');
+        go.href = go.textContent = link;
+        copy.onclick = () => navigator.clipboard?.writeText(link).then(() => { copy.textContent = 'Copied'; }, () => {});
+        done.hidden = false;
+      }
     } catch (err) { msg.textContent = err instanceof TypeError ? "Kiori can't be reached right now. Please try again in a while, or email help@kiori.io." : err.message; }
     btn.disabled = false;
   });

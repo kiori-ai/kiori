@@ -183,7 +183,7 @@ node bin/kiori.mjs serve                       # API、控制台和文档：http
 
 ## 🤝 社区
 
-Kiori 目前处于内测阶段，内测期间免费。[申请使用](https://kiori.io/#access)，提一个 [issue](https://github.com/kiori-ai/kiori/issues)，或者写信到 **help@kiori.io**。你告诉我们的，会决定我们接下来做什么。
+Kiori 目前处于免费公测阶段，公测期间免费，适用[测试版条款](https://kiori.io/terms)和[隐私政策](https://kiori.io/privacy)（英文）。[立即使用](https://kiori.io/#access)，提一个 [issue](https://github.com/kiori-ai/kiori/issues)，或者写信到 **help@kiori.io**。你告诉我们的，会决定我们接下来做什么。
 
 ## 📄 许可证
 

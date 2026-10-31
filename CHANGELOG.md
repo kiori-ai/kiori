@@ -10,9 +10,11 @@ All notable changes to Kiori are written down here. The format follows [Keep a C
 - A release workflow: a version tag builds the Python SDK from `sdk/`, checks that the tag, `pyproject.toml` and `package.json` agree on the version, and publishes it to PyPI by trusted publishing, with no token.
 - A test badge in the READMEs, and the server's current size in lines of code.
 - This changelog, issue templates for bugs and questions, and a pull request template.
+- The beta terms and the privacy policy, at `/terms` and `/privacy` on the site and the server (`legal/`, with the facts they depend on in `src/legal.mjs`). They're linked from the site, the console, the docs and the READMEs. Neither has been reviewed by a lawyer yet.
 
 ### Changed
 
+- Access is self-serve. A valid request from the form on kiori.io makes the project at once, on the customer's own brain API key, and the answer carries its one-time sign-in link, which the page shows. The same email again gets a new link to that project while nobody has signed in to it yet, and `409` once someone has. Requests left waiting from before are still approved in the console. The beta is now called a free beta rather than a private one.
 - The install instructions in the READMEs, the docs and the console now point at the published homes: `npm install kiori`, `pip install kiori-ai`, and the SillyTavern extension's repository, https://github.com/kiori-ai/SillyTavern-Kiori, for Extensions → Install extension. The single files and the zip stay as the alternative.
 
 ## [2.0.0] - 2026-10-31

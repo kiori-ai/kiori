@@ -21,7 +21,7 @@ your app ── a character card ─────────▶  Kiori  ── a
 
 ## Quickstart
 
-1. **Get access.** Ask on [kiori.io](https://kiori.io/#access). We email you a sign-in link; it works once, within 7 days.
+1. **Get access** on [kiori.io](https://kiori.io/#access). Your project is made right away, and the page gives you a sign-in link to the console; it works once, within 7 days.
 2. **Add your brain API key.** In the console, paste an OpenRouter, OpenAI or Gemini key. Kiori recognizes the provider, checks the key and suggests a model. Kiori thinks with this key, and you pay your provider directly.
 3. **Make a Kiori key** for your app, in the console. It's shown once.
 4. **Call Kiori** from your server:
@@ -65,7 +65,7 @@ Both SDKs try again on their own when Kiori or your model provider is briefly un
 
 ## Status
 
-Kiori is in **private beta**, free while the beta lasts. You bring your own model key and pay your provider directly; Kiori adds nothing on top. Questions, bugs or ideas: [help@kiori.io](mailto:help@kiori.io).
+Kiori is in a **free beta**: free while the beta lasts, under the [beta terms](/terms) and the [privacy policy](/privacy). You bring your own model key and pay your provider directly; Kiori adds nothing on top. Questions, bugs or ideas: [help@kiori.io](mailto:help@kiori.io).
 
 ## Read on
 

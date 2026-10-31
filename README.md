@@ -181,7 +181,7 @@ Settings, the CLI and moving to a server: [docs/self-hosting.md](docs/self-hosti
 
 ## 🤝 Community
 
-Kiori is in private beta: free while it lasts. [Ask for access](https://kiori.io/#access), open an [issue](https://github.com/kiori-ai/kiori/issues), or write to **help@kiori.io**. What you tell us shapes what we build.
+Kiori is in a free beta: free while it lasts, under the [beta terms](https://kiori.io/terms) and the [privacy policy](https://kiori.io/privacy). [Get access](https://kiori.io/#access), open an [issue](https://github.com/kiori-ai/kiori/issues), or write to **help@kiori.io**. What you tell us shapes what we build.
 
 ## 📄 License
 

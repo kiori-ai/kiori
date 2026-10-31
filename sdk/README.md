@@ -24,7 +24,7 @@ Kiori stores no brains and no chats. A brain is a JSON object you keep, in your 
 
 ## Before you start
 
-1. Ask for access on [kiori.io](https://kiori.io/#access). Your sign-in link opens the console.
+1. Get access on [kiori.io](https://kiori.io/#access): the page gives you a sign-in link that opens the console.
 2. In the console, paste your **brain API key** (OpenRouter, OpenAI or Gemini) and create a **Kiori key** for your app. Kiori builds and updates brains on your brain API key, and you pay your provider directly.
 3. Keep the Kiori key on your server, for example in `KIORI_API_KEY`.
 
@@ -155,6 +155,7 @@ A failed organize changes nothing: keep the brain you had, and the next call pic
 - [Concepts](https://kiori.io/docs/concepts): the brain file, presence, organizer, auditor, sleep
 - [API reference](https://kiori.io/docs/api), and [openapi.json](https://kiori.io/openapi.json) to generate a client in another language
 - [kiori.io](https://kiori.io)
+- [Beta terms](https://kiori.io/terms) and [privacy policy](https://kiori.io/privacy)
 
 ## License
 

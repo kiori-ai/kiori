@@ -4,7 +4,7 @@ Kiori never writes your chat and never keeps it. Your app keeps the conversation
 
 ## Before you start
 
-1. **Get access** on [kiori.io](https://kiori.io/#access). The sign-in link we email you opens the console. It works once, within 7 days; if it runs out, reply and we'll send a new one.
+1. **Get access** on [kiori.io](https://kiori.io/#access). Your project is made right away, and the page gives you a sign-in link that opens the console. Open it in the browser you'll use for the console: it works once, within 7 days. If it runs out before you open it, ask again with the same email for a new one; once you've signed in, write to [help@kiori.io](mailto:help@kiori.io) for another.
 2. **Add your brain API key** in the console: an OpenRouter, OpenAI or Gemini key. Kiori recognizes the provider from the key, checks that it works, and suggests a model you can change. Kiori builds and updates brains with this key, and you pay your provider directly.
 3. **Make a Kiori key** for your app. It's shown once; Kiori keeps only a hash of it.
 

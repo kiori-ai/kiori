@@ -1,9 +1,11 @@
 // The docs pages: the markdown in docs/ (overview.md is the front page), as HTML in kiori.io's look: cream paper,
-// cobalt ink, the serif headings; the pages down the side, the page's sections on the right. No scripts.
+// cobalt ink, the serif headings; the pages down the side, the page's sections on the right. No scripts. The beta terms
+// and the privacy policy (legal/, see legal.mjs) are pages of the same kind, at /terms and /privacy.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './config.mjs';
 import { markdown } from './markdown.mjs';
+import { LEGAL, LEGAL_TITLES, legalText } from './legal.mjs';
 
 export const DOCS = ['overview', 'integration', 'concepts', 'api', 'security'];
 const TITLES = { overview: 'Overview', integration: 'Integration', concepts: 'Concepts', api: 'API reference', security: 'Security' };
@@ -26,6 +28,7 @@ a{color:var(--cobalt);text-decoration:none}a:hover{text-decoration:underline}img
 .side{position:sticky;top:60px;align-self:start;height:calc(100vh - 60px);overflow:auto;padding:34px 4px 24px 14px;margin-left:-14px}
 .side p{margin:0 0 10px;font:400 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
 .side a{display:block;margin:0 0 2px -10px;padding:6px 10px;border-radius:8px;color:var(--ink-2);font-size:14px}.side a:hover{background:var(--cobalt-2);text-decoration:none}
+.side p.sub{margin-top:26px}
 .side a.on{background:var(--card);color:var(--ink);font-weight:500;box-shadow:0 0 0 1px var(--line)}
 .side .help{display:flex;align-items:center;gap:10px;margin-top:28px;padding-top:18px;border-top:1px dashed var(--line);font:600 19px/1.1 var(--hand);color:var(--ink-2)}
 .side .help img{width:46px;height:46px;border-radius:50%;border:3px solid var(--card);box-shadow:0 0 0 1.5px var(--cobalt);background:#f3ead8}
@@ -59,18 +62,20 @@ main strong{font-weight:600}
 // email_off keeps Cloudflare's email obfuscation away: its decoding script would be blocked by the page's script policy.
 // The side nav scrolls, so it keeps room on its left for what reaches past its edge (the links' highlight, the face's ring).
 export function docsPage(name, { site = false, api = '' } = {}) {
-    if (!DOCS.includes(name)) return null;
+    const legal = LEGAL.includes(name);
+    if (!legal && !DOCS.includes(name)) return null;
     const file = path.join(ROOT, 'docs', `${name}.md`);
-    if (!fs.existsSync(file)) return null;
-    const body = markdown(fs.readFileSync(file, 'utf8'));
-    const href = d => `/docs${d === 'overview' ? '' : `/${d}`}`;
-    const h1 = (body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? TITLES[name]).replace(/<[^>]+>/g, '');
+    if (!legal && !fs.existsSync(file)) return null;
+    const body = markdown(legal ? legalText(name) : fs.readFileSync(file, 'utf8'));
+    const href = d => LEGAL.includes(d) ? `/${d}` : `/docs${d === 'overview' ? '' : `/${d}`}`;
+    const link = (d, title) => `<a href="${href(d)}"${d === name ? ' class="on" aria-current="page"' : ''}>${title}</a>`;
+    const h1 = (body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)?.[1] ?? TITLES[name] ?? LEGAL_TITLES[name]).replace(/<[^>]+>/g, '');
     const sections = [...body.matchAll(/<h2 id="([^"]+)">([\s\S]*?)<\/h2>/g)].map(m => `<a href="#${m[1]}">${m[2].replace(/<[^>]+>/g, '')}</a>`).join('');
-    const i = DOCS.indexOf(name), prev = DOCS[i - 1], next = DOCS[i + 1];
+    const i = legal ? -1 : DOCS.indexOf(name), prev = DOCS[i - 1], next = legal ? null : DOCS[i + 1];
     const signIn = site ? `${api}/console` : '/console';
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${h1} · Kiori docs</title><meta name="description" content="Kiori docs: ${TITLES[name]}.">${ICONS}${FONTS}<style>${CSS}</style></head>
-<body><!--email_off--><header class="top"><a class="logo" href="/docs"><i></i>kiori<small>docs</small></a><span class="sp"></span><nav><a class="wide" href="/">Home</a><a class="wide" href="/openapi.json">OpenAPI</a><a class="wide" href="https://github.com/kiori-ai/kiori">GitHub</a><a href="${signIn}">Sign in</a><a class="btn" href="/#access">Request access</a></nav></header>
-<div class="page"><nav class="side" aria-label="Docs"><p>Docs</p>${DOCS.map(d => `<a href="${href(d)}"${d === name ? ' class="on" aria-current="page"' : ''}>${TITLES[d]}</a>`).join('')}<div class="help"><img src="/site/img/face-wink.webp" alt="" width="46" height="46"><span>stuck? <a href="mailto:help@kiori.io">write to us</a></span></div></nav>
-<main>${body}<nav class="pager">${prev ? `<a href="${href(prev)}"><small>Previous</small>${TITLES[prev]}</a>` : ''}${next ? `<a class="next" href="${href(next)}"><small>Next</small>${TITLES[next]}</a>` : ''}</nav><p class="foot">© 2026 kiori · brains for characters</p></main>
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${h1} · Kiori${legal ? '' : ' docs'}</title><meta name="description" content="Kiori${legal ? `: ${LEGAL_TITLES[name]}` : ` docs: ${TITLES[name]}`}.">${ICONS}${FONTS}<style>${CSS}</style></head>
+<body><!--email_off--><header class="top"><a class="logo" href="/docs"><i></i>kiori<small>docs</small></a><span class="sp"></span><nav><a class="wide" href="/">Home</a><a class="wide" href="/openapi.json">OpenAPI</a><a class="wide" href="https://github.com/kiori-ai/kiori">GitHub</a><a href="${signIn}">Sign in</a><a class="btn" href="/#access">Get access</a></nav></header>
+<div class="page"><nav class="side" aria-label="Docs"><p>Docs</p>${DOCS.map(d => link(d, TITLES[d])).join('')}<p class="sub">Legal</p>${LEGAL.map(d => link(d, LEGAL_TITLES[d])).join('')}<div class="help"><img src="/site/img/face-wink.webp" alt="" width="46" height="46"><span>stuck? <a href="mailto:help@kiori.io">write to us</a></span></div></nav>
+<main>${body}<nav class="pager">${prev ? `<a href="${href(prev)}"><small>Previous</small>${TITLES[prev]}</a>` : ''}${next ? `<a class="next" href="${href(next)}"><small>Next</small>${TITLES[next]}</a>` : ''}</nav><p class="foot">© 2026 kiori · brains for characters · <a href="/terms">terms</a> · <a href="/privacy">privacy</a></p></main>
 ${sections ? `<aside class="toc"><p>On this page</p>${sections}</aside>` : '<aside class="toc"></aside>'}</div><!--/email_off--></body></html>`;
 }

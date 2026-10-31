@@ -60,6 +60,7 @@ Under the settings, the status shows each character's brain in the open chat: ho
 - **Kiori stores no brains and no chats.** To build a brain, the extension sends the character's card (in a group, with the other members' names) to the Kiori address in your settings. Before a reply, it sends the brains, your persona's name and the last 12 messages; to learn, the same with the last 60 messages. Hidden messages are never sent. Kiori uses what it gets to answer, then keeps none of it. What Kiori does keep is your account: your keys, usage counts, and, for 30 days, a note of each call that failed on its side (which endpoint, the status and the error code, never what was said).
 - **Model work runs on your brain API key.** Building and learning call the model provider whose key you put in your Kiori console, so that provider sees the text it works on, under its own terms.
 - **Your Kiori key** is saved in SillyTavern's settings on the machine running SillyTavern, in plain text like other extension settings.
+- **The rest** is in the [privacy policy](https://kiori.io/privacy). Using Kiori means you accept the [beta terms](https://kiori.io/terms).
 
 ## Troubleshooting
 

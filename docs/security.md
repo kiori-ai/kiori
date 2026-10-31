@@ -13,6 +13,8 @@ Kiori holds very little, on purpose: no brains, no chats, and one key of yours t
 | Usage | Counts: calls per endpoint per day, and for each model call Kiori made on your key, what it was for, the model, the tokens and the cost. |
 | Failed calls | For a call that failed on our side: when, which endpoint, the status and its code, and your provider's status. Kept 30 days. |
 
+The [privacy policy](/privacy) says the rest: who else handles data, how long each thing is kept, and your rights.
+
 **Never kept:** brains, chats, messages, prompts, or anything a model wrote. A brain and its messages are in our server's memory while a call runs, parts of them go to your model provider in Kiori's prompts, and then they're gone from our side.
 
 ## Your brain API key

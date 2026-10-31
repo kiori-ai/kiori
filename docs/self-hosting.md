@@ -49,7 +49,7 @@ node bin/kiori.mjs site                             # the public site as static 
 npm test                                            # the tests (a fake model provider: nothing is spent)
 ```
 
-The admin console is the same `/console`, signed in with `data/local/admin.key`. It approves access requests (which makes the customer's project and a one-time sign-in link to send them) and shows the weekly numbers. The admin key is kept only while that browser tab is open.
+The admin console is the same `/console`, signed in with `data/local/admin.key`. It lists access requests (the form on the site makes each one's project at once and shows its one-time sign-in link; a request left waiting from before needs Approve, which makes the project and a link to send them), makes a new link for a project, and shows the weekly numbers. The admin key is kept only while that browser tab is open.
 
 ## Secrets and keys
 
