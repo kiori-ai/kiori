@@ -1,0 +1,3 @@
+# Runs write their replays here. Keep a run by adding it on purpose: git add -f bench/results/<file>
+*
+!.gitignore
