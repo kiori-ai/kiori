@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/kiori-ai/kiori/blob/main/SECURITY.md
+    about: Please don't open an issue. Write to help@kiori.io with "Security" in the subject, as SECURITY.md explains.
+  - name: Commercial licensing
+    url: https://github.com/kiori-ai/kiori#-license
+    about: Running Kiori in a commercial product or service needs a commercial license. Write to help@kiori.io.
+  - name: Docs
+    url: https://github.com/kiori-ai/kiori/tree/main/docs
+    about: Concepts, integration, the API reference, security and self-hosting.

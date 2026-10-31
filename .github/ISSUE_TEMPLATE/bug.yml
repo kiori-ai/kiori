@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in Kiori doesn't work as it should.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. A security problem doesn't go here: see [SECURITY.md](https://github.com/kiori-ai/kiori/blob/main/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, with the error message and code if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps, or a minimal call
+      description: The steps that show it, or the smallest call that does (curl or an SDK snippet). Replace keys with `kio_...` and leave out real chats.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kiori version
+      description: "`GET /health` reports it, for example `2.0.0`."
+      placeholder: "2.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: runs-on
+    attributes:
+      label: Where it runs
+      options:
+        - api.kiori.io
+        - Self-hosted
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: For a self-hosted Kiori, or for the JavaScript SDK (`node --version`).
+      placeholder: "v24.22.2"
+  - type: input
+    id: request-id
+    attributes:
+      label: X-Request-Id
+      description: The `X-Request-Id` header (or `request_id` in the error) of a call that failed, if you have one.
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: Before you send it
+      options:
+        - label: I removed every key and personal data from this report.
+          required: true

@@ -1,0 +1,20 @@
+name: Question
+description: Ask how something in Kiori works.
+title: "question: "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The answer may already be in the [docs](https://github.com/kiori-ai/kiori/tree/main/docs), and your project's settings and keys are in the console. If not, ask away.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What you tried or read
+      description: The calls you made, or the docs pages you read. Leave out keys and personal data.

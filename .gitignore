@@ -6,3 +6,5 @@ node_modules/
 # the static site (kiori site)
 dist/
 __pycache__/
+# the group-chat example saves the brains and the chat next to itself
+examples/group-chat.json
