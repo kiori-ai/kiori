@@ -43,7 +43,7 @@ What each character knows right now, for your prompt.
 | `budget` | Characters of text per brain (6000 by default, 200 to 60000). |
 | `limit` | Memories per brain (10 by default, at most 50). |
 
-Answer: `{ "text", "characters": [{ "name", "text", "memories", "relations", "state", "facts", "forgot", "intentions", "mind", "lies" }], "check_recommended" }`. `lies` (only when there are any) are the lies a character keeps up: `{ "to", "said", "truth" }`. With one brain, `text` is the block for your prompt. The brains are only read. Memories and facts learned in a conversation carry `source` (`{ "how", "by", "origin", "at" }`: how they know it, from whom, whom the teller said it came from, and the message) and `confidence` (0 to 1); `text` lists what they were told apart from what they know for sure.
+Answer: `{ "text", "characters": [{ "name", "text", "memories", "relations", "state", "facts", "forgot", "intentions", "mind", "lies" }], "check_recommended" }`. `lies` (only when there are any) are the lies a character keeps up: `{ "id", "to", "said", "truth" }`, where `id` is the `told` memory's, and each of `facts` carries its memory's `id` too. With one brain, `text` is the block for your prompt. The brains are only read. Memories and facts learned in a conversation carry `source` (`{ "how", "by", "origin", "at" }`: how they know it, from whom, whom the teller said it came from, and the message) and `confidence` (0 to 1); `text` lists what they were told apart from what they know for sure.
 
 ### POST /v1/brains/organize
 
@@ -133,7 +133,7 @@ The brain API key is never shown back, only its provider and last four character
 | `GET /v1/personality` | The 41 personality dimensions and the archetypes. |
 | `POST /v1/access` | Asks for access: `{ "email", "name", "company", "use_case" }`. A valid request makes your project at once and gives `{ "ok", "link", "expires_at", "project": { "id", "name" } }`: `link` signs you in to the console, once, within 7 days. The same email again gives a new link to the same project while nobody has signed in to it yet, and `409` `CONFLICT` once someone has. |
 | `POST /v1/signin` | Trades a sign-in link's one-time token for a Kiori key: `{ "token": "kis_..." }` gives `{ "key", "project": { "id", "name" } }`. The console does this when a link opens. A used or expired token gives `401` `LINK_EXPIRED`. |
-| `GET /health` | `{ "ok", "name", "version" }`. |
+| `GET /health` | `{ "ok", "name", "version", "commit" }`. `commit` tells two builds of one version apart: the commit the deploy kit wrote in `DEPLOYED` in the app's folder, else the one git has checked out there; without either it is left out. It is read once, when the server starts. |
 
 ## Errors
 

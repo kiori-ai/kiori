@@ -107,12 +107,12 @@ export interface CharacterContext {
     memories: Array<Omit<Memory, 'v'> & { score: number }>;
     relations: Relation[];
     state: State;
-    facts: Array<{ about: string[]; fact: string }>;
+    facts: Array<{ id: string; about: string[]; fact: string; source?: Memory['source']; confidence?: number }>;
     forgot: string[];
     intentions: string[];
     mind: Array<{ title: string; general: string; in_them: string[]; note: string | null }>;
-    /** The lies they keep up, only when there are any */
-    lies?: Array<{ to: string[]; said: string; truth: string | null }>;
+    /** The lies they keep up, only when there are any; id is the told memory's */
+    lies?: Array<{ id: string; to: string[]; said: string; truth: string | null }>;
 }
 
 export interface RecallResult {

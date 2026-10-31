@@ -70,11 +70,19 @@ function answer(prompt) {
         // whoever spoke; names whom it came from ("Mira says": Mira; a rumor: Rook, named in the line or not); and is
         // sure of it unless the line says "maybe". A line that opens on a name ("Ines, Mira says...") is also a told
         // record, to that name, whoever spoke it. A line with "[lies]" is a lie: its truth is quoted from a "[truth]" line
-        // when the scenes have one (else words nobody said); with "[lies:secret]" the truth is the first secret it was shown
+        // when the scenes have one (else words nobody said); with "[lies:secret]" the truth is the first secret it was shown;
+        // with "[lies:ref]" the memory titled "The truth…" it was shown, and with "[lies:quote]" that memory's words
         const passed = scenes.filter(s => /\b(says|said|told me|rumor)\b|\[lies/.test(s.text));
         const cite = s => words(s.text).slice(0, 10).join(' ');
         const truthLine = scenes.find(s => s.text.includes('[truth]')), secret = prompt.match(/^- \[(m_[\w-]+)\] \(their secret\)/m)?.[1];
-        const lie = s => (/\[lies/.test(s.text) ? { lie: true, truth: s.text.includes('[lies:secret]') ? '' : truthLine ? cite(truthLine) : 'words nobody ever said in these scenes at all', truth_ref: s.text.includes('[lies:secret]') ? `[${secret}]` : '' } : { lie: false, truth: '' });
+        const truthMemory = prompt.match(/^- \[(m_[\w-]+)\] The truth[^:]*: (.*)$/m);
+        const lie = s => {
+            if (!/\[lies/.test(s.text)) return { lie: false, truth: '' };
+            if (s.text.includes('[lies:secret]')) return { lie: true, truth: '', truth_ref: `[${secret}]` };
+            if (s.text.includes('[lies:ref]')) return { lie: true, truth: '', truth_ref: truthMemory ? `[${truthMemory[1]}]` : '' };
+            if (s.text.includes('[lies:quote]')) return { lie: true, truth: truthMemory ? words(truthMemory[2]).slice(0, 10).join(' ') : '', truth_ref: '' };
+            return { lie: true, truth: truthLine ? cite(truthLine) : 'words nobody ever said in these scenes at all', truth_ref: '' };
+        };
         return {
             memories: [
                 { title: `${memory[1]} remembers ${scenes[0].text.slice(0, 30)}`, body: `I remember: ${scenes.map(s => s.text).join(' ')}`, keys: words(scenes[0].text).slice(0, 3), about: ['Leo'], importance: 0.7, emotion: 0.5, evidence: quote },
@@ -1026,7 +1034,8 @@ test('lies: the liar keeps the truth and a told record; the listener believes th
     // Recall: the liar knows the lies he keeps up; the listener has nothing special
     const mind = contextOf(tom, { player: 'Leo' });
     assert.match(mind.text, /## Lies they are keeping up \(toward those people they stick to the lie, unless they choose to confess\)\n- To Ines: "Ines, I was home asleep all night long, ask anyone\. \[lies\]"\. The truth: midnight tom rows the stolen crates/);
-    assert.deepEqual(mind.lies, [{ to: ['Ines'], said: NIGHT[2].content, truth: told.truth }]);
+    assert.deepEqual(mind.lies, [{ id: told.id, to: ['Ines'], said: NIGHT[2].content, truth: told.truth }], 'with the id of the told memory');
+    assert.ok(mind.facts.every(f => tom.memories.some(m => m.id === f.id && m.kind === 'fact')), 'facts carry their memory ids');
     const hers = contextOf(ines, { player: 'Leo' });
     assert.doesNotMatch(hers.text, /Lies they are keeping up/);
     assert.equal(hers.lies, undefined);
@@ -1056,6 +1065,80 @@ test('lies: the organizer sees memory ids and the secrets a stretch touches; a l
     const plain = rook.memories.find(m => m.kind === 'told');
     assert.deepEqual([plain.told_to, plain.lie, plain.truth, plain.truth_ref], [['Ines'], false, undefined, undefined]);
     assert.doesNotMatch(contextOf(rook).text, /Lies they are keeping up/);
+});
+
+test('lies: a truth only the liar\'s own line brings up is still shown to the organizer, by id or quoted from the memory', async () => {
+    const [before] = await lightBrains('Tom');
+    // Twelve memories that fit the stretch far better than the truth does: a search on the stretch leaves the truth out
+    addMemories(before, Array.from({ length: 12 }, (_, i) => ({ title: `Harbor ${i}`, body: 'Storm and fog over the harbor; the nets, the boats at the quay, gulls over the lighthouse and the breakwater.', keys: ['harbor', 'storm', 'fog'], about: [] })));
+    const [truth] = addMemories(before, [{ title: 'The truth of that night', body: 'I rowed the stolen crates to the chapel and hid them under the floor at midnight.', keys: ['crates', 'chapel'], about: [] }], { scope: 'chat' });
+    const present = ['Tom', 'Ines', 'Leo'];
+    const stretch = marker => [
+        { id: `h1${marker}`, role: 'narrator', content: '*Storm over the harbor. Fog rolls across the nets, the boats knock at the quay, gulls scream over the lighthouse and the breakwater.*', present },
+        { id: `h2${marker}`, role: 'narrator', content: '*The harbor fog thickens; nets, boats, quay, gulls, lighthouse and breakwater all vanish in the storm.*', present },
+        { id: `h3${marker}`, role: 'assistant', name: 'Tom', content: `Ines, I never touched any crates, I was home asleep. [lies:${marker}]`, present },
+    ];
+    assert.ok(!searchMemories(before, stretch('ref').map(m => m.content).join('\n'), null, { limit: 10 }).some(m => m.id === truth.id), 'not among the stretch\'s ten best hits');
+    for (const marker of ['ref', 'quote']) {
+        const ines = (await lightBrains('Ines'))[0];
+        const [tom] = (await organize(P, [structuredClone(before), ines], false, { messages: stretch(marker), player: 'Leo', now: true, hold: 0 })).brains;
+        assert.match(chatCalls('You are the memory of Tom').at(-1).body.messages[0].content.split('THE SCENES')[0], new RegExp(`^- \\[${truth.id}\\] The truth of that night`, 'm'));
+        const told = tom.memories.find(m => m.kind === 'told');
+        assert.deepEqual([told.told_to, told.lie, told.truth_ref], [['Ines'], true, truth.id], marker);
+        assert.equal(told.truth, marker === 'ref' ? 'I rowed the stolen crates to the chapel and hid them under the floor at midnight.' : 'rowed the stolen crates the chapel and hid them under');
+    }
+});
+
+test('lies: a character who speaks in a stretch is shown what they lived just before it, even when nothing in it calls that up', async () => {
+    let [tom] = await lightBrains('Tom');
+    addMemories(tom, Array.from({ length: 12 }, (_, i) => ({ title: `Harbor ${i}`, body: 'Storm and fog over the harbor; the nets, the boats at the quay, gulls over the lighthouse and the breakwater.', keys: ['harbor', 'storm', 'fog'], about: [], importance: 0.9, strength: 1 })), { scope: 'chat' });
+    const night = { id: 'r1', role: 'narrator', content: '*Midnight. Tom rows the stolen crates to the chapel.*', present: ['Tom', 'Leo'] };
+    tom = (await organize(P, [tom], true, { messages: [night], player: 'Leo', now: true, hold: 0 })).brain;
+    const [lived] = tom.memories.filter(m => m.to === 1 && m.kind === 'memory');
+    const present = ['Tom', 'Ines', 'Leo'];
+    const morning = [night,
+        { id: 'r2', role: 'narrator', content: '*Storm over the harbor. Fog rolls across the nets, the boats knock at the quay, gulls scream over the lighthouse and the breakwater.*', present },
+        { id: 'r3', role: 'assistant', name: 'Tom', content: 'Ines, I was home asleep, I swear it.', present }];
+    const line = morning[2].content, stretch = morning.slice(1).map(m => m.content).join('\n');
+    assert.ok(![...searchMemories(tom, stretch, null, { limit: 10 }), ...searchMemories(tom, line, null, { limit: 6 })].some(m => m.id === lived.id), 'neither the stretch nor the line calls it up');
+    await organize(P, [tom, (await lightBrains('Ines'))[0]], false, { messages: morning, player: 'Leo', now: true, hold: 0 });
+    assert.match(chatCalls('You are the memory of Tom').at(-1).body.messages[0].content.split('THE SCENES')[0], new RegExp(`^- \\[${lived.id}\\] `, 'm'));
+});
+
+test('provenance: an origin named just before, in the same scene, narration or the teller\'s own, is kept; one named in another scene, or the teller, is not', async () => {
+    let [tom, ines] = await lightBrains('Tom', 'Ines');
+    const tavern = ['Tom', 'Ines', 'Leo'];
+    const messages = [
+        { id: 'o1', role: 'narrator', content: '*Rook spits off the end of the pier and stomps away, muttering.*', present: tavern },
+        { id: 'o2', role: 'assistant', name: 'Tom', content: 'the rumor goes that the ferry stops running this winter.', present: tavern },
+        { id: 'o3', role: 'narrator', content: '*Out past the breakwater, Rook rows alone into the fog.*', present: ['Ines', 'Leo'] },
+        { id: 'o4', role: 'assistant', name: 'Tom', content: 'the rumor is the harbor master drinks before noon.', present: tavern },
+        { id: 'o5', role: 'assistant', name: 'Rook', content: 'the rumor is the lamp in the lighthouse is cursed.', present: [...tavern, 'Rook'] },
+    ];
+    [tom, ines] = (await organize(P, [tom, ines], false, { messages, player: 'Leo', now: true, hold: 0 })).brains;
+    // The fake says every rumor came from Rook, whom none of these lines names
+    assert.deepEqual(ines.memories.filter(m => m.kind === 'fact').map(m => m.source).sort((a, b) => a.at - b.at), [
+        { how: 'heard', by: 'Tom', origin: 'Rook', at: 2 },
+        { how: 'heard', by: 'Tom', at: 4 },
+        { how: 'heard', by: 'Rook', at: 5 },
+    ]);
+});
+
+test('health: the commit the deploy kit wrote, else git\'s, else none', async () => {
+    const { startServer, commitOf } = await import('../src/server.mjs');
+    const deployed = fs.mkdtempSync(path.join(os.tmpdir(), 'kiori-app-')), bare = fs.mkdtempSync(path.join(os.tmpdir(), 'kiori-app-'));
+    fs.writeFileSync(path.join(deployed, 'DEPLOYED'), 'version 2.0.0\ncommit abc1234\nshipped 2026-10-31T12:00:00Z\n');
+    assert.equal(commitOf(deployed), 'abc1234');
+    assert.equal(commitOf(bare), null, 'no DEPLOYED and no git checkout');
+    for (const [root, commit] of [[deployed, 'abc1234'], [bare, undefined]]) {
+        const server = startServer(0, '127.0.0.1', { root });
+        await new Promise(r => server.once('listening', r));
+        try {
+            const h = await (await fetch(`http://127.0.0.1:${server.address().port}/health`)).json();
+            assert.deepEqual([h.ok, h.version, h.commit], [true, JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url))).version, commit]);
+            assert.equal('commit' in h, Boolean(commit));
+        } finally { server.close(); }
+    }
 });
 
 test('check: a liar who contradicts the lie toward that listener is a lie_slip; toward someone else, nothing', async () => {

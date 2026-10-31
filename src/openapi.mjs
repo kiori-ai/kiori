@@ -67,8 +67,8 @@ const schemas = {
     RecallInput: { allOf: [ref('OneOrMany'), obj({ messages: arr(ref('ChatMessage')), query: str('Recall for this instead of the last messages'), player: str(), budget: int('Characters of text per brain (default 6000)'), limit: int('Memories per brain (default 10)') })] },
     CharacterContext: obj({
         name: str(), text: str('A ready-to-use block for your prompt'), memories: arr(ref('Memory')), relations: arr(ref('Relation')), state: ref('State'),
-        facts: arr(obj({ about: arr(str()), fact: str(), source: ref('Source'), confidence: num() })), forgot: arr(str()), intentions: arr(str()), mind: arr(obj({})),
-        lies: arr(obj({ to: arr(str()), said: str(), truth: nul(str()) }), 'The lies they keep up (only when there are any)'),
+        facts: arr(obj({ id: str('The memory it is'), about: arr(str()), fact: str(), source: ref('Source'), confidence: num() })), forgot: arr(str()), intentions: arr(str()), mind: arr(obj({})),
+        lies: arr(obj({ id: str('The told memory'), to: arr(str()), said: str(), truth: nul(str()) }), 'The lies they keep up (only when there are any)'),
     }),
     RecallResult: obj({ characters: arr(ref('CharacterContext')), text: str('The context, when one brain was sent'), check_recommended: bool('The player brought up the past: worth checking the reply') }),
     OrganizeInput: { allOf: [ref('OneOrMany'), obj({
@@ -127,7 +127,7 @@ export const openapi = {
         '/v1/personality': { get: { ...op('The 41 personality dimensions and the archetypes', { tags: ['Brains'] }), security: [] } },
         '/v1/access': { post: { summary: 'Ask for access (no key needed): your project at once, and a sign-in link', description: 'A valid request makes a project on your own brain API key and answers with a one-time sign-in link to the console (good for 7 days). An email whose project nobody has signed in to yet gets a new link to that project; once someone has, the answer is 409.', tags: ['Project'], security: [], requestBody: { required: true, ...json(obj({ email: str(), name: str(), company: str(), use_case: str() }, ['email'])) }, responses: { ...ok(obj({ ok: bool(), link: str('A one-time sign-in link to the console'), expires_at: str(), project: obj({ id: str(), name: str() }) })), 400: errors[400], 409: { description: 'This email already has a project someone signed in to', ...json(ref('Error')) }, 429: { description: 'Too many requests from this address, or for today' } } } },
         '/v1/signin': { post: { summary: 'Trade a sign-in link\'s one-time token for a Kiori key (no key needed)', description: 'The console does this when a sign-in link opens. A token works once, within 7 days.', tags: ['Project'], security: [], requestBody: { required: true, ...json(obj({ token: str('kis_...') }, ['token'])) }, responses: { ...ok(obj({ key: str('A new Kiori key for this browser'), project: obj({ id: str(), name: str() }) })), 401: { description: 'The link was used or ran out (LINK_EXPIRED)', ...json(ref('Error')) }, 429: { description: 'Too many sign-ins from this address' } } } },
-        '/health': { get: { summary: 'Is it running', security: [], responses: ok(obj({ ok: bool(), name: str(), version: str() })) } },
+        '/health': { get: { summary: 'Is it running', security: [], responses: ok(obj({ ok: bool(), name: str(), version: str(), commit: str('The build\'s commit, when the server knows it') })) } },
     },
     components: { securitySchemes: { key: { type: 'http', scheme: 'bearer', description: 'A project key: kio_...' } }, schemas },
 };

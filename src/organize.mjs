@@ -13,7 +13,7 @@ import { askJSON, requireModelKey } from './llm.mjs';
 import { evidenceFound, norm, textOf, num, tokens, whoIs, sameCharacter, samePerson, mentions, bareName, firstSentence } from './text.mjs';
 import { fingerprint, characterOf, addMemories, setRelation, setState, getRelations, getState, closestFirst, mergeCard, touch, answerWith, RELATION_FIELDS, LIMITS } from './brainfile.mjs';
 import { placeEvents, modeOf, perceived, presentOf, placementChunks, eventLine, speakersIn, MODES } from './scenes.mjs';
-import { searchMemories, queryVector, vectorFor, playerName, embedMissing } from './recall.mjs';
+import { searchMemories, queryVectors, vectorFor, playerName, embedMissing } from './recall.mjs';
 import { profile } from './personality.mjs';
 import { decay, consolidate } from './sleep.mjs';
 
@@ -255,17 +255,24 @@ const NARRATED = ['saw', 'read', 'inferred'], SPOKEN = ['heard', 'told', 'inferr
 // What a message taken in only partly allows: only heard, it was heard or told; overheard, overheard; only seen, seen
 const PARTLY = { heard: ['heard', 'told'], overheard: ['overheard'], saw: ['saw'] }, CAP = { heard: 0.85, overheard: 0.4 };
 const BELIEF = { saw: 1, read: 0.9, heard: 0.85, told: 0.85, overheard: 0.4, inferred: 0.5, rumor: 0.5 };
+// Two messages of one scene: as placed, or, with presence sent, with the same people there
+const people = e => (e.present ?? []).map(norm).sort().join('\u0000');
+const sameScene = (a, b) => (a.scene || b.scene ? a.scene === b.scene : people(a) === people(b));
 // How a character knows an item, worked out from the message its quote is in, not taken from the model: narration (or
 // an action in *stars*, or their own line) is seen, someone's line is heard from them. The person the teller quoted
-// stays only when that message names them. A message they took in only partly decides it (e.mode). Confidence comes
-// from how, and from how much they trusted the teller before this pass; the model may only lower it.
-function provenance(item, e, { self, scope, trust }) {
+// stays only when that message names them, or one of the two just before it in the same scene that they took in too
+// (narration, or the teller's own), and is neither the teller nor themself. A message they took in only partly decides
+// it (e.mode). Confidence comes from how, and from how much they trusted the teller before this pass; the model may
+// only lower it.
+function provenance(item, e, { self, scope, trust, batch }) {
     let by = e.mode === 'saw' ? null : saidBy(e, item.evidence);
     if (by && (sameCharacter(whoIs(by, scope), self) || [...e.text.matchAll(/\*([^*\n]+)\*/g)].some(m => evidenceFound(item.evidence, m[1])))) by = null;
     const allowed = PARTLY[e.mode] ?? (by ? SPOKEN : NARRATED);
     const source = { how: allowed.includes(item.how) ? item.how : allowed[0], ...(by && { by }), at: e.seq };
     const via = bareName(item.via);
-    if (via && mentions(e.text, { name: via }) && !(by && samePerson(via, by)) && ![self.name, ...self.aliases].some(n => samePerson(n, via))) source.origin = via;
+    const named = x => mentions(x.text, { name: via });
+    const before = batch.filter(x => x.seq < e.seq && x.seq >= e.seq - 2 && sameScene(x, e) && (x.role === 'narrator' || (by && x.speaker && samePerson(x.speaker, by))));
+    if (via && (named(e) || before.some(named)) && !(by && samePerson(via, by)) && ![self.name, ...self.aliases].some(n => samePerson(n, via))) source.origin = via;
     let confidence = Math.min(by && source.origin ? 0.7 : BELIEF[source.how], CAP[e.mode] ?? 1);
     if (by) confidence *= 0.6 + 0.4 * trust(by) / 100;
     // A 0 is how models leave a number empty, so only a doubt above it counts
@@ -273,22 +280,33 @@ function provenance(item, e, { self, scope, trust }) {
     return { source, confidence: Math.round(confidence * 100) / 100 };
 }
 
-// What they already remember that a stretch touches: the best search hits, and always their secrets whose keys come up
-// in it and what they told about its topic (a lie above all), so the organizer can tell a lie from a mistake. A few
-// of each at most: the prompt stays the size it was, give or take.
-function knownFor(brain, text, qv) {
+// What they already remember that a stretch touches: the best search hits; when they speak in it, what each of their
+// own lines brings up and what they lived just before it (the truth behind a lie is often far from the rest of the
+// stretch, and most often what they just did); and always their secrets whose keys come up in it and what they told
+// about its topic (a lie above all), so the organizer can tell a lie from a mistake. A few of each at most: the prompt
+// stays about the size it was.
+function knownFor(brain, text, qv, own = [], from = Infinity) {
     const hits = searchMemories(brain, text, qv, { limit: 10 });
-    const words = new Set(tokens(text)), has = new Set(hits.map(m => m.id));
+    const words = new Set(tokens(text)), has = new Set(hits.map(m => m.id)), lines = [];
+    const add = m => { if (lines.length < 20 && !has.has(m.id)) { has.add(m.id); lines.push(m); } };
+    for (const line of own) searchMemories(brain, line.text, line.qv, { limit: 6 }).forEach(add);
+    const chat = brain.memories.filter(m => m.scope === 'chat' && m.to < from && ['memory', 'fact'].includes(m.kind)), last = Math.max(0, ...chat.map(m => m.to));
+    if (own.length) chat.filter(m => m.to === last).sort((a, b) => b.importance - a.importance).slice(0, 4).forEach(add);
     const touches = list => list.some(w => words.has(w));
     const more = kind => brain.memories.filter(m => m.kind === kind && m.status !== 'done' && !has.has(m.id)
         && touches(kind === 'secret' ? m.keys.flatMap(tokens) : tokens(`${m.said ?? ''} ${m.truth ?? ''}`).filter(w => w.length >= 4)));
     const told = more('told').sort((a, b) => Number(!!b.lie) - Number(!!a.lie));
-    return [...hits, ...more('secret').slice(0, 5), ...told.slice(0, 5)];
+    return [...hits, ...lines, ...more('secret').slice(0, 5), ...told.slice(0, 5)];
 }
+// Their own lines in a stretch: their messages, and their "Name:" lines in a narrator's
+const ownLines = (batch, self, scope) => batch.flatMap(e => (e.role === 'narrator' ? e.text.split('\n') : [e.text])
+    .filter(l => { const by = e.role === 'narrator' ? speakersIn(l)[0] : e.speaker; return l.trim() && by && sameCharacter(whoIs(by, scope), self); }));
 
 async function learnBatch(project, brain, batch, player, scope) {
-    const text = batch.map(e => e.text).join('\n');
-    const known = knownFor(brain, text, vectorFor(project, brain, await queryVector(project, [brain], text)));
+    const text = batch.map(e => e.text).join('\n'), self = characterOf(brain), own = ownLines(batch, self, scope);
+    // One embedding call for the stretch and each of their own lines
+    const [qv, ...vs] = await queryVectors(project, [brain], [text, ...own]);
+    const known = knownFor(brain, text, vectorFor(project, brain, qv), own.map((t, i) => ({ text: t, qv: vectorFor(project, brain, vs[i]) })), batch[0].seq);
     const plans = brain.memories.filter(m => m.kind === 'intention' && m.status === 'active').map(m => m.title);
     const forgot = brain.memories.filter(m => m.kind === 'forgot').map(m => m.body);
     const r = await askJSON({
@@ -305,15 +323,16 @@ async function learnBatch(project, brain, batch, player, scope) {
     const dropped = { memories: 0, facts: 0, intentions: 0, forgot: 0, told: 0 };
     const keep = (list, key) => list.filter(x => (proven(x.evidence) ? true : (dropped[key]++, false)));
     const span = { from: batch[0].seq, to: batch.at(-1).seq };
-    const self = characterOf(brain), relations = getRelations(brain);
+    const relations = getRelations(brain);
     const trust = name => relations.find(x => samePerson(bareName(x.target), bareName(name)))?.trust ?? 50;
     // Memories and facts with where they came from: the message their quote is in
-    const sourced = (list, key) => list.flatMap(x => { const e = proven(x.evidence) && locate(x.evidence, batch, scenes); return e ? [{ x, ...provenance(x, e, { self, scope, trust }) }] : (dropped[key]++, []); });
+    const sourced = (list, key) => list.flatMap(x => { const e = proven(x.evidence) && locate(x.evidence, batch, scenes); return e ? [{ x, ...provenance(x, e, { self, scope, trust, batch }) }] : (dropped[key]++, []); });
     const memories = sourced(r.memories, 'memories').map(({ x, source, confidence }) => ({ ...x, kind: 'memory', ...span, source, confidence }));
     const facts = sourced(r.facts, 'facts').map(({ x: f, source, confidence }) => ({ kind: 'fact', title: f.fact.slice(0, 120), body: f.fact, about: [f.about], importance: 0.7, emotion: 0.2, ...span, evidence: f.evidence, source, confidence }));
     // What they passed on: only from their own line, and only to people who were there to hear it (in full, or on the
-    // phone: not through a wall, not only seeing it, not asleep). A lie needs its truth: quoted from the scenes, or the
-    // id of a memory of theirs that holds it; without either it is kept as a plain record of what they said
+    // phone: not through a wall, not only seeing it, not asleep). A lie needs its truth: quoted from the scenes, or a
+    // memory of theirs that holds it (its id, a secret too, or one whose words the truth quotes); without either it is
+    // kept as a plain record of what they said
     const there = (e, name) => {
         const c = whoIs(name, scope), n = c ? null : (e.present ?? []).find(x => samePerson(bareName(x), name));
         const mode = c ? modeOf(e, c, scope) : n == null ? null : e.modes?.[norm(n)] ?? 'full';
@@ -322,9 +341,11 @@ async function learnBatch(project, brain, batch, player, scope) {
     const told = r.told.flatMap(t => {
         const e = proven(t.evidence) && locate(t.evidence, batch, scenes), to = [...new Set(t.to.map(bareName).filter(Boolean))].slice(0, 12), said = t.said.trim() || t.evidence;
         if (!e || !to.length || !sameCharacter(whoIs(saidBy(e, t.evidence) ?? '', scope), self) || to.some(n => samePerson(n, self.name) || !there(e, n))) return (dropped.told++, []);
-        const ref = t.lie === true ? brain.memories.find(m => m.id === bareRef(t.truth_ref) && m.kind !== 'told') : null;
+        const quote = String(t.truth ?? '').trim();
+        const ref = t.lie !== true ? null : brain.memories.find(m => m.id === bareRef(t.truth_ref) && m.kind !== 'told')
+            ?? (quote && !proven(quote) ? brain.memories.find(m => !['told', 'forgot', 'mind'].includes(m.kind) && evidenceFound(quote, `${m.title}\n${m.body}`)) : null);
         const lie = t.lie === true && (proven(t.truth) || !!ref);
-        const truth = lie ? String(t.truth ?? '').trim() || firstSentence(ref.body) : null;
+        const truth = lie ? quote || firstSentence(ref.body) : null;
         return [{
             kind: 'told', title: `${lie ? 'Lied to' : 'Told'} ${to.join(', ')}: ${said}`.slice(0, 120), body: `I told ${to.join(', ')}: "${said}"${lie ? `. It was a lie: ${truth}` : ''}`,
             about: to, told_to: to, said, lie, ...(lie && { truth, ...(ref && { truth_ref: ref.id }) }), importance: lie ? 0.7 : 0.5, emotion: 0.2, evidence: t.evidence, ...span, source: { how: 'saw', at: e.seq },

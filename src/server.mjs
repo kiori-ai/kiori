@@ -7,6 +7,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { ROOT, config, adminKey, guardSecretFiles } from './config.mjs';
 import { keyOf, createProject, listProjects, getProject, updateProject, publicProject, createKey, listKeys, revokeKey, usage, countCall, recordError, pruneErrors, resealAll } from './accounts.mjs';
 import { readBrains, readBrain } from './brainfile.mjs';
@@ -186,7 +187,7 @@ async function handle(req, res) {
     }
     // The beta terms and the privacy policy, pages like the docs
     if (req.method === 'GET' && (p === '/terms' || p === '/privacy')) return send(res, 200, docsPage(p.slice(1)));
-    if (p === '/health') return send(res, 200, { ok: true, name: 'kiori', version: VERSION });
+    if (p === '/health') return send(res, 200, { ok: true, name: 'kiori', version: VERSION, ...(COMMIT && { commit: COMMIT }) });
     // The SDKs, and the SillyTavern extension as a zip (unzipped into SillyTavern's extensions folder, it's a folder "kiori")
     if (req.method === 'GET' && /^\/sdk\/kiori\.(mjs|py|d\.ts)$/.test(p)) return send(res, 200, fs.readFileSync(path.join(ROOT, p)), { 'Content-Type': `${p.endsWith('.mjs') ? 'text/javascript' : 'text/plain'}; charset=utf-8`, 'Cache-Control': 'public, max-age=300' });
     if (req.method === 'GET' && p === '/sillytavern.zip') return send(res, 200, sillytavernZip(), { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="kiori-sillytavern.zip"' });
@@ -242,6 +243,13 @@ async function handle(req, res) {
 }
 
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+// Which build is running, read once at start: the commit the deploy kit wrote in DEPLOYED ("commit <sha>"), else the
+// one git has checked out here, else none (no git, or not a checkout)
+let COMMIT = null;
+export function commitOf(root = ROOT) {
+    try { const m = /^commit[ \t]+([\w.+-]{4,64})[ \t]*$/m.exec(fs.readFileSync(path.join(root, 'DEPLOYED'), 'utf8')); if (m) return m[1]; } catch {}
+    try { const sha = execFileSync('git', ['-C', root, 'rev-parse', '--short', 'HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 }).trim(); return /^[0-9a-f]{4,40}$/.test(sha) ? sha : null; } catch { return null; }
+}
 // The extension's own files, named: anything else that ends up in the folder stays out of the zip
 const EXTENSION_FILES = ['manifest.json', 'index.js', 'style.css', 'README.md', 'LICENSE'];
 export const sillytavernZip = () => zip(EXTENSION_FILES.map(f => ({ name: `kiori/${f}`, data: fs.readFileSync(path.join(ROOT, 'sillytavern', f)) })));
@@ -260,7 +268,8 @@ function noteError(req, res) {
     } catch (e) { console.error('Kiori: could not note the error:', e.message); }
 }
 
-export function startServer(port = config.port, host = config.host) {
+export function startServer(port = config.port, host = config.host, { root = ROOT } = {}) {
+    COMMIT = commitOf(root);
     // Before anything is served: the files with secrets closed to others, and the keys kept from before sealed the
     // current way (bound to their project, with the newest secret)
     const closed = guardSecretFiles();

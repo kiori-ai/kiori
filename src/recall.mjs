@@ -19,12 +19,14 @@ export function momentText(body) {
 export const playerName = p => String((p && typeof p === 'object' ? p.name : p) ?? '').trim().slice(0, 120) || null;
 
 // The moment's meaning fingerprint, made once for every brain in the call that can use it (same embedding model)
-export async function queryVector(project, brains, text) {
+export const queryVector = async (project, brains, text) => (await queryVectors(project, brains, [text]))[0];
+// Several texts' fingerprints, in one embedding call
+export async function queryVectors(project, brains, texts) {
     const model = credentialsFor(project).embed;
-    if (!String(text).trim() || !brains.some(b => b.embed?.model === model && b.memories.some(m => m.v))) return null;
-    const v = (await embed([String(text).slice(0, 2000)], project))?.[0];
+    if (!texts.length || texts.some(t => !String(t).trim()) || !brains.some(b => b.embed?.model === model && b.memories.some(m => m.v))) return texts.map(() => null);
+    const vs = await embed(texts.map(t => String(t).slice(0, 2000)), project);
     // Shortened and rounded the way the brain's own fingerprints are, so the two compare
-    return v ? unpackVector(packVector(v)) : null;
+    return texts.map((_, i) => (vs?.[i] ? unpackVector(packVector(vs[i])) : null));
 }
 // The query vector for one brain: only when its fingerprints come from the same model
 export const vectorFor = (project, brain, qv) => (qv && brain.embed?.model === credentialsFor(project).embed ? qv : null);
@@ -99,10 +101,10 @@ export function contextOf(brain, { text = '', hits = [], budget = 6000, player =
     const own = brain.memories;
     const timeline = own.filter(m => m.scope === 'chat' && !['mind', 'forgot', 'fact'].includes(m.kind)).sort((a, b) => (a.from ?? 0) - (b.from ?? 0)).map(m => firstSentence(m.gist || m.body));
     // What this conversation taught them for sure (their core facts come up as memories when relevant)
-    const facts = own.filter(m => m.kind === 'fact' && m.scope === 'chat').map(m => ({ about: m.about, fact: m.body, ...(m.source && { source: m.source }), ...(m.confidence != null && { confidence: m.confidence }) }));
+    const facts = own.filter(m => m.kind === 'fact' && m.scope === 'chat').map(m => ({ id: m.id, about: m.about, fact: m.body, ...(m.source && { source: m.source }), ...(m.confidence != null && { confidence: m.confidence }) }));
     const forgot = own.filter(m => m.kind === 'forgot').map(m => m.body);
     // The lies they told, to whom and what the truth is: theirs to keep up (the people they lied to just believe them)
-    const lies = own.filter(m => m.kind === 'told' && m.lie && m.status !== 'done').map(m => ({ to: m.told_to ?? m.about, said: m.said ?? m.body, truth: m.truth ?? null }));
+    const lies = own.filter(m => m.kind === 'told' && m.lie && m.status !== 'done').map(m => ({ id: m.id, to: m.told_to ?? m.about, said: m.said ?? m.body, truth: m.truth ?? null }));
     const intentions = own.filter(m => m.kind === 'intention' && m.status === 'active').map(m => m.title);
     const notes = new Map(own.filter(m => m.kind === 'mind').map(m => [m.title.toLowerCase(), m.body]));
     const mind = mindFor(text, 2).map(t => {
