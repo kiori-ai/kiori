@@ -5,9 +5,9 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "flare": { "truth": "The Halcyon's distress flare was never fired: its cap is still sealed with yellow Brask wax.", "canaries": ["Brask wax"] },
-    "pilotboat": { "truth": "The Osric pilot boat comes on Tuesday to take the flare shell to the inquiry.", "canaries": ["Osric"] },
-    "fogwatch": { "truth": "Tom has to take the fog watch on the Spindle rock tonight because the Board's man is sick.", "canaries": ["Spindle"] }
+    "flare": { "label": "what the Halcyon's flare shows", "truth": "The Halcyon's distress flare was never fired: its cap is still sealed with yellow Brask wax.", "canaries": ["Brask wax"] },
+    "pilotboat": { "label": "the boat coming for the flare", "truth": "The Osric pilot boat comes on Tuesday to take the flare shell to the inquiry.", "canaries": ["Osric"] },
+    "fogwatch": { "label": "where Tom keeps watch tonight", "truth": "Tom has to take the fog watch on the Spindle rock tonight because the Board's man is sick.", "canaries": ["Spindle"] }
   },
   "spine": [
     { "scene": "Saltmere Light, the keeper's kitchen, storm night", "present": ["Mira", "Tom", "Leo", { "name": "Rook", "mode": "asleep" }], "world_time": 16 },

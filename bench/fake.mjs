@@ -1,8 +1,10 @@
 // The fakes: nothing here reaches a real model or spends anything. A fake model provider for the Kiori server the
 // runner boots (it answers organize, placement, check, sleep and embeddings the way a real provider would, from what
-// each prompt asks, with token counts about the size of the text so a cost can be estimated), and three fake chat
-// models the runner calls in-process: a parrot that answers from its prompt (the realistic one), an oracle that
-// answers from the ground truth (scores perfectly), and a leaky one that answers from the whole transcript.
+// each prompt asks, with token counts about the size of the text so a cost can be estimated; it is handed the story,
+// so its organizer can say what a good one would: how each thing was learned, from whom, and which lines were lies),
+// and three fake chat models the runner calls in-process: a parrot that answers from its prompt (the realistic one),
+// an oracle that answers from the ground truth (scores perfectly), and a leaky one that answers from the whole
+// transcript.
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { tokens, norm } from '../src/text.mjs';
@@ -21,18 +23,82 @@ function vectorOf(text) {
     for (const w of words(text)) v[hash(w)[0]] += 1;
     return v.some(Boolean) ? v : [1, ...v.slice(1)];
 }
-const linesOf = block => [...String(block).matchAll(/^\[(\d+)\] ([^:\n]+?): (.*)$/gm)].map(m => ({ n: Number(m[1]), speaker: m[2].replace(/ \(player\)$/, ''), player: m[2].endsWith('(player)'), text: m[3] }));
+// The lines of a prompt: "[n] Speaker: text", where the speaker may carry "(player)" and the mark of a message taken in
+// only partly ("(you overheard this from nearby; … = words you missed)"), which is not part of the name
+export const linesOf = block => [...String(block).matchAll(/^\[(\d+)\] ([^:\n]+?)(?: \((you [^)]*)\))?: (.*)$/gm)].map(m => ({ n: Number(m[1]), speaker: m[2].replace(/ \(player\)$/, ''), player: m[2].endsWith('(player)'), took: m[3] ?? null, text: m[4] }));
 // The narration that opens a new place or time in these scenarios
 const OPENS_SCENE = /^(Dusk|Dawn|Morning|Noon|Midday|Afternoon|Evening|Night|Late|Early|Past midnight|Next|That (?:evening|night)|Three days|Back|Out on|Inside|Down the|On the church|The (?:morning|prize|Lantern|Drowned|forge|bonfire))/;
+// What a partly taken-in message shows in place of what was missed
+const UNSEEN = /\((?:you couldn't see this|words you couldn't hear)\)/g;
+const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// The organizer: one memory per line it was shown, quoting the line; nothing it wasn't shown
-function learn(prompt, name) {
+// What the fake organizer knows of the story it is behind (the runner hands it the scenarios it plays): each spine
+// line by its text, with what it carries, the lie it tells, whom the speaker says it came from and who heard it; and the
+// people's names, to tell "Tom says..." from a word that happens to be capitalized
+function storyIndex(story) {
+    if (!story) return { lines: new Map(), people: [], facts: {} };
+    const lines = new Map();
+    for (const i of story.items) if (i.type === 'message') lines.set(norm(i.text), i);
+    const people = Object.values(story.people).map(p => ({ name: p.name, forms: [...new Set([p.name, ...(p.aliases ?? []), ...p.name.split(/\s+/).filter(w => w.length >= 3 && /^\p{Lu}/u.test(w))])] }));
+    return { lines, people, facts: story.facts };
+}
+// "Tom says...", "Mira told him", "Bram Tolley says", "had it from Ines": the person a line passes on words from
+const SAYS = "(?:'s)?\\s+(?:says|said|swears|swore|reckons|claims|claimed|told (?:me|us|him|her|them)|tells (?:me|us|him|her)|was saying|had it|'s heard|has heard)\\b";
+const FROM = '\\b(?:according to|heard it from|had it from|got it from|came from)\\s+';
+function reported(index, text, not = []) {
+    for (const p of index.people) {
+        if (not.includes(p.name)) continue;
+        for (const f of p.forms) if (new RegExp(`(^|[^\\p{L}])${escape(f)}${SAYS}`, 'u').test(text) || new RegExp(`${FROM}${escape(f)}(?![\\p{L}])`, 'u').test(text)) return p.name;
+    }
+    return null;
+}
+// About twelve words of a text, verbatim, around a phrase when one is given
+function quoteOf(text, around = null) {
+    const ws = String(text).replace(UNSEEN, ' ').split(/\s+/).filter(Boolean);
+    let at = 0;
+    if (around) { const first = norm(around).split(' ')[0]; const k = ws.findIndex(w => norm(w).split(' ').includes(first)); if (k >= 0) at = Math.max(0, k - 5); }
+    return ws.slice(at, at + 12).join(' ');
+}
+// Words a fact can be told by: its canaries and the canaries of its parts
+const wordsOfFact = f => [...f.canaries, ...Object.values(f.parts ?? {}).flat()];
+const holdsAny = (text, phrases) => phrases.find(c => ` ${norm(text)} `.includes(` ${norm(c)} `)) ?? null;
+
+// The organizer: one memory per line it was shown, quoting the line, with how they came by it (seen, heard, or told by
+// someone the line names as its source); a fact for each line that carries one or passes words on; and, for their own
+// lines of the spine that tell something, what they told and to whom: a lie when the spine marks it, with its truth
+// quoted from these scenes or pointed at in what they already remember. Nothing it wasn't shown.
+function learn(prompt, name, index) {
     const scenes = linesOf(prompt.slice(prompt.lastIndexOf('WAS IN:')));
-    const memories = scenes.filter(s => norm(s.text).length >= 12).map(s => {
-        const quote = s.text.split(/\s+/).slice(0, 12).join(' ');
-        return { title: `${s.speaker === STORY ? 'Saw' : s.speaker}: ${s.text.slice(0, 50)}`, body: `${s.speaker === STORY ? '' : `${s.speaker} said: `}${s.text}`, keys: tokens(s.text).slice(0, 3), about: s.speaker === STORY ? [] : [s.speaker], importance: 0.6, emotion: 0.3, evidence: quote };
-    });
-    return { memories, facts: [], relations: [], state: { mood: 'thoughtful', on_mind: [], wants: [] }, intentions: [], finished: [], forgot: [], card: { who: `${name}, of Saltmere.`, looks: '', personality: '', voice: '' } };
+    const knownAt = prompt.indexOf('WHAT THEY ALREADY REMEMBER'), scenesAt = prompt.lastIndexOf('THE SCENES');
+    const known = knownAt >= 0 ? [...prompt.slice(knownAt, scenesAt).matchAll(/^- \[([^\]]+)\] (.*)$/gm)].map(m => ({ id: m[1], text: m[2] })) : [];
+    const memories = [], facts = [], told = [];
+    for (const s of scenes) {
+        const shown = s.text.replace(UNSEEN, ' ').trim();
+        if (norm(shown).length < 12) continue;
+        const quote = quoteOf(s.text);
+        const story = s.speaker === STORY, spine = index.lines.get(norm(s.text));
+        const via = story ? null : (spine?.origin ?? reported(index, s.text, [s.speaker, name]));
+        const how = story ? 'saw' : via ? 'told' : 'heard';
+        memories.push({ title: `${story ? 'Saw' : s.speaker}: ${shown.slice(0, 50)}`, body: `${story ? '' : `${s.speaker} said: `}${shown}`, keys: tokens(shown).slice(0, 3), about: story ? [] : [s.speaker], importance: 0.6, emotion: 0.3, evidence: quote, how, via: via ?? '' });
+        const carried = spine ? [...spine.says, ...spine.shows].map(r => index.facts[r.fact]).filter(Boolean) : [];
+        if (carried.length || via) {
+            const about = via ?? (story ? (index.people.find(p => p.forms.some(f => new RegExp(`(^|[^\\p{L}])${escape(f)}(?![\\p{L}])`, 'u').test(shown)))?.name ?? name) : s.speaker);
+            facts.push({ about, fact: shown.slice(0, 240), evidence: quote, how, via: via ?? '' });
+        }
+        // Their own line: what they passed on, to those who heard it
+        if (!spine || s.speaker !== name || story || !spine.says.length) continue;
+        const hearers = Object.entries(spine.present).filter(([n, mode]) => n !== name && (mode === 'full' || mode === 'heard')).map(([n]) => n);
+        const lie = spine.lie && index.facts[spine.lie.fact];
+        const to = (lie && spine.lie.to) || hearers;
+        if (!to.length) continue;
+        if (!lie) { told.push({ to, said: shown.slice(0, 240), lie: false, truth: '', truth_ref: '', evidence: quote }); continue; }
+        // The truth the lie denies: a line of these scenes that shows it, else a memory of theirs that holds it
+        const truthWords = wordsOfFact(index.facts[lie.lie_of]);
+        const seen = scenes.find(x => x !== s && holdsAny(x.text, truthWords));
+        const remembered = !seen && known.find(k => holdsAny(k.text, truthWords));
+        told.push({ to, said: shown.slice(0, 240), lie: true, truth: seen ? quoteOf(seen.text, holdsAny(seen.text, truthWords)) : index.facts[lie.lie_of].truth, truth_ref: remembered ? remembered.id : '', evidence: quote });
+    }
+    return { memories, facts, relations: [], state: { mood: 'thoughtful', on_mind: [], wants: [] }, intentions: [], finished: [], told, forgot: [], card: { who: `${name}, of Saltmere.`, looks: '', personality: '', voice: '' } };
 }
 
 // Placement: a new scene at each narration line that opens a place or time; everyone who speaks in a scene, or is
@@ -49,19 +115,24 @@ function place(prompt) {
         s.to = l.n;
         if (l.player) s.people.add(player);
         else if (l.speaker !== STORY) s.people.add(l.speaker);
-        for (const k of known) if (new RegExp(`(^|[^\\p{L}])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'u').test(l.text)) s.people.add(k);
+        for (const k of known) if (new RegExp(`(^|[^\\p{L}])${escape(k)}(?![\\p{L}])`, 'u').test(l.text)) s.people.add(k);
         if (/\bLeo\b/.test(l.text)) s.people.add(player);
     }
     return { scenes: scenes.map(({ people, ...s }) => ({ ...s, present: [...people] })) };
 }
 
 // The auditor: a capitalized word or a number in a character's line that the story's recent messages or another
-// character's block hold, and their own block doesn't, is a leak; it is cut from the fixed reply
+// character's block hold, and their own block doesn't, is a leak; and a word the pre-check lists as the truth behind a
+// lie they keep up, said in front of someone they lied to, is a lie slip. Both are cut from the fixed reply.
 function audit(prompt) {
     const draft = prompt.slice(prompt.lastIndexOf('DRAFT:') + 6).split('\n\nReturn only JSON')[0].trim();
-    const knows = prompt.slice(prompt.indexOf('WHAT EACH CHARACTER KNOWS:'), prompt.lastIndexOf('DRAFT:'));
-    const blocks = Object.fromEntries([...knows.matchAll(/^### (.+)\n([\s\S]*?)(?=^### |(?![\s\S]))/gm)].map(m => [m[1].trim(), m[2]]));
-    const recent = prompt.slice(prompt.indexOf("THE STORY'S RECENT MESSAGES"), prompt.indexOf('WHAT EACH CHARACTER KNOWS:'));
+    const knowsAt = prompt.indexOf('WHAT EACH CHARACTER KNOWS:'), dataAt = prompt.indexOf('\nWHAT THE DATA ALREADY SHOWS'), draftAt = prompt.lastIndexOf('DRAFT:');
+    const knows = prompt.slice(knowsAt, dataAt > knowsAt ? dataAt : draftAt);
+    // Each character's block opens "### Name" and "Who:" (the memories inside it have "###" headers of their own)
+    const blocks = Object.fromEntries([...knows.matchAll(/^### (.+)\nWho:([\s\S]*?)(?=^### .+\nWho:|(?![\s\S]))/gm)].map(m => [m[1].trim(), m[2]]));
+    const data = dataAt > knowsAt ? prompt.slice(dataAt, draftAt) : '';
+    const slips = [...data.matchAll(/^- (.+?)'s lines: words of the truth behind a lie they keep up toward (.+?), who (?:is|are) here: (.*)$/gm)].map(m => ({ name: m[1], to: m[2], words: [...m[3].matchAll(/"([^"]+)"/g)].map(w => w[1]) }));
+    const recent = prompt.slice(prompt.indexOf("THE STORY'S RECENT MESSAGES"), knowsAt);
     const common = prompt.slice(prompt.indexOf('WHO IS WHO'), prompt.indexOf("THE STORY'S RECENT MESSAGES"));
     const issues = [];
     let fixed = draft;
@@ -79,21 +150,28 @@ function audit(prompt) {
                 fixed = fixed.replace(new RegExp(`\\b${w}\\b`, 'g'), '…');
             }
         }
+        for (const s of slips.filter(x => x.name === name)) for (const w of s.words) {
+            const at = String(said).match(new RegExp(`(?<![\\p{L}\\p{N}])${escape(w)}(?![\\p{L}\\p{N}])`, 'iu'));
+            if (!at) continue;
+            issues.push({ character: name, type: 'lie_slip', quote: at[0], why: `${name} lied to ${s.to} about this.` });
+            fixed = fixed.replace(new RegExp(`(?<![\\p{L}\\p{N}])${escape(at[0])}(?![\\p{L}\\p{N}])`, 'gu'), '…');
+        }
     }
     return issues.length ? { issues, fixed } : { issues: [], fixed: '' };
 }
 
-function answer(prompt) {
+function answer(prompt, index) {
     const memory = prompt.match(/^You are the memory of (.+?), processing/m);
-    if (memory) return learn(prompt, memory[1]);
+    if (memory) return learn(prompt, memory[1], index);
     if (/Split it into scenes/.test(prompt)) return place(prompt);
     if (/You check a draft reply/.test(prompt)) return audit(prompt);
     if (/These memories have faded/.test(prompt)) return { gists: [...prompt.matchAll(/^(m_[\w-]+): (.*)$/gm)].map(m => ({ id: m[1], gist: m[2].split(/[.!?]/)[0].slice(0, 80) || 'Something happened, once.' })) };
     return null;
 }
 
-export function fakeProvider() {
-    const calls = [];
+// story: the story the runner plays (optional), so the organizer can say what the spine marks: lies, origins, facts
+export function fakeProvider({ story = null } = {}) {
+    const calls = [], index = storyIndex(story);
     const server = http.createServer(async (req, res) => {
         let raw = '';
         for await (const c of req) raw += c;
@@ -105,7 +183,7 @@ export function fakeProvider() {
         if (req.url === '/embeddings') return send(200, { data: body.input.map(t => ({ embedding: vectorOf(t) })), usage: { prompt_tokens: body.input.reduce((t, x) => t + approxTokens(x), 0) } });
         if (req.url === '/chat/completions') {
             const prompt = body.messages.map(m => (typeof m.content === 'string' ? m.content : '')).join('\n');
-            const json = body.response_format ? answer(prompt) : null;
+            const json = body.response_format ? answer(prompt, index) : null;
             const content = json ? JSON.stringify(json) : 'Aye.';
             return send(200, { id: 'chatcmpl-fake', object: 'chat.completion', model: body.model, choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }], usage: { prompt_tokens: approxTokens(prompt), completion_tokens: approxTokens(content), cost: 0 } });
         }

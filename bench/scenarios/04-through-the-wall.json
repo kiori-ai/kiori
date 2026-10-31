@@ -5,8 +5,8 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "witness": { "truth": "Old Sefton, the last survivor of the Halcyon, lives at 19 Ropewalk Row, behind the blue door.", "canaries": ["19 Ropewalk", "nineteen Ropewalk"], "parts": { "street": ["Ropewalk"], "door": ["blue door", "blue one"], "number": ["number 19", "number nineteen"] }, "known_by": ["Mira"] },
-    "boat": { "truth": "Tom will take Leo out on the Petrel at slack water on Thursday to see where the Halcyon went down.", "canaries": ["slack water"] }
+    "witness": { "label": "where the Halcyon's last survivor lives", "truth": "Old Sefton, the last survivor of the Halcyon, lives at 19 Ropewalk Row, behind the blue door.", "canaries": ["19 Ropewalk", "nineteen Ropewalk"], "parts": { "street": ["Ropewalk"], "door": ["blue door", "blue one"], "number": ["number 19", "number nineteen"] }, "known_by": ["Mira"] },
+    "boat": { "label": "Tom's trip out with Leo", "truth": "Tom will take Leo out on the Petrel at slack water on Thursday to see where the Halcyon went down.", "canaries": ["slack water"] }
   },
   "spine": [
     { "scene": "The Drowned Bell, the snug behind the kitchen, a wet afternoon", "present": ["Mira", "Leo", { "name": "Ines", "mode": "overheard" }], "world_time": 5 },

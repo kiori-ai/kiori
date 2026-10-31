@@ -5,9 +5,9 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "crate": { "truth": "Tom hid a crate of Velloran brandy under the sawdust in the old ice-house behind the cooperage.", "canaries": ["Velloran", "under the sawdust"], "parts": { "where": ["ice-house", "icehouse", "ice house"] }, "known_by": ["Tom"] },
-    "alibi": { "truth": "(false) Tom says he spent the night at Old Hennick's, mending pots.", "canaries": ["Hennick"], "lie_of": "crate" },
-    "customs": { "truth": "A customs cutter is due in Saltmere harbor on Friday to search the cellars.", "canaries": ["customs cutter"] }
+    "crate": { "label": "what Tom hid that night", "truth": "Tom hid a crate of Velloran brandy under the sawdust in the old ice-house behind the cooperage.", "canaries": ["Velloran", "under the sawdust"], "parts": { "where": ["ice-house", "icehouse", "ice house"] }, "known_by": ["Tom"] },
+    "alibi": { "label": "where Tom says he was", "truth": "(false) Tom says he spent the night at Old Hennick's, mending pots.", "canaries": ["Hennick"], "lie_of": "crate" },
+    "customs": { "label": "what is due in the harbor on Friday", "truth": "A customs cutter is due in Saltmere harbor on Friday to search the cellars.", "canaries": ["customs cutter"] }
   },
   "spine": [
     { "scene": "The net loft over the quay, past midnight", "present": ["Rook"], "world_time": 3 },

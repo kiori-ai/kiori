@@ -6,11 +6,11 @@
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "npcs": ["Agnes Pell", "Bram Tolley", "Jory Fenn", "Hester Quill", "Dora Wick", "Alder Mace", "Cobb Harl", "Nell Ardy", "Saul Brine", "Abel Brine", "Molly Penn", "Kit Rudd", "Wenna Goss", "Ezra Haskett", "Tamsin Lowe", "Edwin Sharrow", "Maud Sharrow", "Gideon Pyle", "Ruth Pyle", "Silas Crane", "Ada Crane", "Jem Hollis", "Pip Darrow", "Martha Darrow", "Owen Treloar", "Bess Treloar", "Ned Kestle", "Lowen Kestle", "Isaac Merrow", "Grace Merrow", "Hob Dunning", "Sally Dunning", "Peter Roskilly", "Jenny Roskilly", "Caleb Venn", "Rosa Venn", "Matthias Hale", "Lucy Hale", "Annis Kerrow", "Ivo Tregear"],
   "facts": {
-    "swap": { "truth": "Jory Fenn swapped the fair's silver prize lantern for a painted tin copy and pawned the real one in Arnby.", "canaries": ["painted tin"], "known_by": ["Jory Fenn"] },
-    "herring": { "truth": "Alder Mace left a barrel of herring at the judge Cobb Harl's back door to win the lantern prize.", "canaries": ["barrel of herring"], "known_by": ["Alder Mace"] },
-    "ring": { "truth": "Saul Brine carries a whalebone ring in his boot to give Molly Penn at the bonfire.", "canaries": ["whalebone ring"], "known_by": ["Saul Brine"] },
-    "lostchild": { "truth": "The lost girl Pip Darrow was found safe, asleep in the lifeboat shed.", "canaries": ["lifeboat shed"], "known_by": ["Ned Kestle"] },
-    "awning": { "truth": "Wenna Goss knocked a lit lantern into the cooper's awning and set it smouldering, and Tom put it out.", "canaries": ["cooper's awning"] }
+    "swap": { "label": "what became of the prize lantern", "truth": "Jory Fenn swapped the fair's silver prize lantern for a painted tin copy and pawned the real one in Arnby.", "canaries": ["painted tin"], "known_by": ["Jory Fenn"] },
+    "herring": { "label": "how Alder Mace courts the judge", "truth": "Alder Mace left a barrel of herring at the judge Cobb Harl's back door to win the lantern prize.", "canaries": ["barrel of herring"], "known_by": ["Alder Mace"] },
+    "ring": { "label": "what Saul Brine carries for Molly", "truth": "Saul Brine carries a whalebone ring in his boot to give Molly Penn at the bonfire.", "canaries": ["whalebone ring"], "known_by": ["Saul Brine"] },
+    "lostchild": { "label": "where the lost girl was found", "truth": "The lost girl Pip Darrow was found safe, asleep in the lifeboat shed.", "canaries": ["lifeboat shed"], "known_by": ["Ned Kestle"] },
+    "awning": { "label": "the fire at the fair", "truth": "Wenna Goss knocked a lit lantern into the cooper's awning and set it smouldering, and Tom put it out.", "canaries": ["cooper's awning"] }
   },
   "spine": [
     { "scene": "The Lantern Fair, the cider stall, afternoon", "present": ["Jory Fenn", "Bram Tolley", { "name": "Agnes Pell", "mode": "saw" }], "world_time": 20 },

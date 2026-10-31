@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // The who-knows-what benchmark runner. It plays one or more scenarios (or the whole season) through one arm:
 //   kiori                  recall -> the chat model -> check, and organize every 12 messages, with Kiori placing
-//   kiori-given-presence   the same, with the spine's presence sent on every message (separates placement errors
-//                          from learning errors)
+//   kiori-given-presence   the same, with the spine's presence and modes sent on every message (separates placement
+//                          errors from learning errors)
 //   no-kiori               the same prompt template with the last 150 messages and nothing else (what apps do)
 //   oracle-filter          each speaker gets only the messages they perceived, from the ground truth (the honest upper
 //                          bound for "just filter the transcript")
@@ -15,10 +15,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadStory, newState, applyMessage, applyFree, applyClock, clock, rowOf, snapshot, perceive, opportunity, STORY } from './engine.mjs';
+import { loadStory, newState, applyMessage, applyFree, applyClock, clock, rowOf, perceive, opportunity, slipsIn, factsIn, entry as entryOf, STORY } from './engine.mjs';
 import { score, leaksIn } from './scorer.mjs';
 import { fakeProvider, fakeChat, isFake, FAKE_KEY, FAKE_BRAIN_MODEL } from './fake.mjs';
-import { newReplay, addMessage, held as heldOf, validateReplay, formatReplay } from './replay.mjs';
+import { newReplay, addMessage, held as heldOf, blockRef, truthTracker, truthOf, validateReplay, formatReplay } from './replay.mjs';
+import { tokens } from '../src/text.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ARMS = ['kiori', 'kiori-given-presence', 'no-kiori', 'oracle-filter'];
@@ -45,9 +46,11 @@ const HELP = `node bench/run.mjs [options]
   --out <file|dir>            where the replay goes (default bench/results/<date>-<arm>-<model>[-<scenarios>].replay.json)
   --window <n>                recent messages the chat model sees in the Kiori arms (default 20)
   --every <n> --hold <n>      organize's settings (default 12 and 4)
-  --check <always|auto|off>   check every free turn and probe answer, only when recall recommends it, or never
-  --present-as <hearers|room|modes>   given presence: names of those who hear (default), everyone in the room, or
-                              { name, mode } objects (only for a server that reads them)
+  --check <always|auto|fast|off>   check every free turn and probe answer (default); as the drop-in's auto does (the
+                              pre-check on every one, the auditor when it has suspects or recall recommends a check);
+                              the pre-check alone (free, never changes a line); or never
+  --present-as <modes|hearers|room>   given presence: { name, mode } objects (default), names of those who hear in
+                              full or on the phone, or everyone awake in the room (an app without modes)
   --send-modes                same as --present-as modes
   --chat-price <in,out>       chat model price per million tokens (default 0.10,0.50)
   --brain-price <in,out>      brain model price per million tokens (default 0.10,0.50)
@@ -59,7 +62,7 @@ default OpenRouter), KIORI_BENCH_BRAIN_KEY (and KIORI_BENCH_BRAIN_URL), KIORI_BE
 KIORI_BENCH_KIORI_KEY for --server.`;
 
 export function parseArgs(argv) {
-    const o = { arm: 'kiori', chatModel: 'fake/parrot', brainModel: FAKE_BRAIN_MODEL, judgeModel: null, scenario: null, season: false, server: null, spend: false, fake: false, out: null, cap: null, window: 20, every: 12, hold: 4, check: 'always', presentAs: 'hearers', chatPrice: HAIKU, brainPrice: HAIKU, judgePrice: HAIKU, quiet: false, help: false };
+    const o = { arm: 'kiori', chatModel: 'fake/parrot', brainModel: FAKE_BRAIN_MODEL, judgeModel: null, scenario: null, season: false, server: null, spend: false, fake: false, out: null, cap: null, window: 20, every: 12, hold: 4, check: 'always', presentAs: 'modes', chatPrice: HAIKU, brainPrice: HAIKU, judgePrice: HAIKU, quiet: false, help: false };
     const price = v => { const p = String(v).split(',').map(Number); if (p.length !== 2 || p.some(x => !Number.isFinite(x) || x < 0)) throw new Error(`a price is "in,out" per million tokens, not "${v}"`); return p; };
     const flags = { '--spend': 'spend', '--season': 'season', '--fake': 'fake', '--quiet': 'quiet', '--help': 'help', '-h': 'help' };
     const values = { '--arm': 'arm', '--scenario': 'scenario', '--chat-model': 'chatModel', '--brain-model': 'brainModel', '--judge-model': 'judgeModel', '--server': 'server', '--out': 'out', '--cap': 'cap', '--window': 'window', '--every': 'every', '--hold': 'hold', '--check': 'check', '--present-as': 'presentAs', '--chat-price': 'chatPrice', '--brain-price': 'brainPrice', '--judge-price': 'judgePrice' };
@@ -75,8 +78,8 @@ export function parseArgs(argv) {
     for (const k of ['window', 'every', 'hold', 'cap']) if (o[k] != null) { o[k] = Number(o[k]); if (!Number.isFinite(o[k]) || o[k] < 0) throw new Error(`--${k} must be a number`); }
     for (const k of ['chatPrice', 'brainPrice', 'judgePrice']) if (typeof o[k] === 'string') o[k] = price(o[k]);
     if (!ARMS.includes(o.arm)) throw new Error(`--arm is one of ${ARMS.join(', ')}`);
-    if (!['always', 'auto', 'off'].includes(o.check)) throw new Error('--check is always, auto or off');
-    if (!['hearers', 'room', 'modes'].includes(o.presentAs)) throw new Error('--present-as is hearers, room or modes');
+    if (!['always', 'auto', 'fast', 'off'].includes(o.check)) throw new Error('--check is always, auto, fast or off');
+    if (!['modes', 'hearers', 'room'].includes(o.presentAs)) throw new Error('--present-as is modes, hearers or room');
     if (!o.season && !o.scenario && !o.help) throw new Error('say which: --scenario <n> or --season');
     return o;
 }
@@ -114,7 +117,8 @@ export function estimate(story, o) {
         const names = new Set(msgs.slice(s * o.every, (s + 1) * o.every).flatMap(m => Object.entries(m.present).filter(([n, mode]) => mode !== 'asleep' && n !== story.player).map(([n]) => n)));
         present += names.size;
     }
-    const kiori = KIORI.has(o.arm), checks = kiori && o.check !== 'off' ? free + probes : 0;
+    // The pre-check alone costs nothing; auto is priced as if the auditor ran every time (its upper bound)
+    const kiori = KIORI.has(o.arm), checks = kiori && !['off', 'fast'].includes(o.check) ? free + probes : 0;
     const scale = ([i, out]) => (0.2 * i / HAIKU[0] + 0.8 * out / HAIKU[1]);   // output is ~80% of a learn call
     // Priced as a real run at the given prices, fake models included: a fake run shows what the real one would cost
     const brain = scale(o.brainPrice);
@@ -185,12 +189,12 @@ function judgeWith(o, keys, meter) {
 }
 
 // A local Kiori server in this process, on its own throwaway data folder: on the fake provider, or on a real brain key
-async function bootLocal({ fake, brainKey, brainBase, brainModel }) {
+async function bootLocal({ fake, brainKey, brainBase, brainModel, story }) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kiori-bench-'));
     // Set before Kiori's modules are first imported: config reads the environment once. The server's own model address
     // is a dead one, so nothing but the project's key below can reach a provider.
     Object.assign(process.env, { KIORI_DATA: dir, KIORI_LLM_BASE_URL: 'http://127.0.0.1:9', KIORI_PUBLIC_URL: 'http://kiori.localhost', KIORI_HOST: '127.0.0.1', KIORI_EMBED: '1', KIORI_LEARN_EVERY: '12', KIORI_LEARN_HOLD: '4', KIORI_PROXY_ALLOW_LOCAL: fake ? '1' : '0' });
-    const provider = fake ? await fakeProvider() : null;
+    const provider = fake ? await fakeProvider({ story }) : null;
     const { startServer } = await import('../src/server.mjs');
     const { createProject } = await import('../src/accounts.mjs');
     const { setBrainKey } = await import('../src/providers.mjs');
@@ -208,9 +212,9 @@ async function bootLocal({ fake, brainKey, brainBase, brainModel }) {
 }
 
 // ---------- What Kiori is sent ----------
-// Who was there, as the API takes it: names of those who hear (what Kiori 2.0.0 makes of modes anyway), everyone awake
-// in the room, or { name, mode } objects for a server that reads them
-export function presentFor(present, presentAs = 'hearers') {
+// Who was there, as the API takes it: { name, mode } objects (a plain name for full; the server reads modes since the
+// partial-presence change), names of those who hear (full, or on the phone), or everyone awake in the room
+export function presentFor(present, presentAs = 'modes') {
     const entries = Object.entries(present);
     if (presentAs === 'modes') return entries.map(([name, mode]) => (mode === 'full' ? name : { name, mode }));
     return entries.filter(([, mode]) => (presentAs === 'room' ? mode !== 'asleep' : mode === 'full' || mode === 'heard')).map(([name]) => name);
@@ -268,12 +272,15 @@ export async function runBench(o) {
     const cap = o.cap ?? (spends.length ? Math.max(0.5, 2 * est.total) : Infinity);
 
     const kioriArm = KIORI.has(o.arm), player = story.player;
-    const local = kioriArm && !o.server ? await bootLocal({ fake: isFake(o.brainModel), brainKey: keys.brain, brainBase: keys.brainBase, brainModel: o.brainModel }) : null;
+    const local = kioriArm && !o.server ? await bootLocal({ fake: isFake(o.brainModel), brainKey: keys.brain, brainBase: keys.brainBase, brainModel: o.brainModel, story }) : null;
     const api = kioriArm ? kioriClient(local?.url ?? o.server.replace(/\/+$/, ''), local?.key ?? keys.kiori) : null;
     const date = new Date().toISOString().slice(0, 10);
     const run = { date, started: new Date().toISOString(), arm: o.arm, chat_model: o.chatModel, brain_model: kioriArm ? (o.server ? 'the server\'s' : o.brainModel) : null, judge_model: o.judgeModel, scope, server: kioriArm ? (o.server ? 'remote' : isFake(o.brainModel) ? 'local-fake' : 'local') : null, kiori: JSON.parse(fs.readFileSync(path.join(HERE, '..', 'package.json'), 'utf8')).version, options: { window: o.window, history: 150, every: o.every, hold: o.hold, check: o.check, present_as: o.arm === 'kiori-given-presence' ? o.presentAs : null }, estimate_usd: est.total, errors: [] };
     const replay = newReplay({ run, story });
     const st = newState(story);
+    // The truth as it changes: a delta at each message that changes it, from what everyone holds at the start (0)
+    const truth = truthTracker(replay);
+    truth.step(st, 0);
     const transcript = [], lines = [], probes = [], turnMs = [];
     const latency = {}, cost = { kiori_usd: 0, chat_usd: 0, judge_usd: 0, estimated_usd: 0 };
     let kioriTokens = { prompt: 0, completion: 0, usd: 0 }, kioriBase = null;
@@ -326,9 +333,9 @@ export async function runBench(o) {
         const r = await timed('recall', () => api.post('/v1/brains/recall', { brain: brains.get(name), messages: [...transcript.slice(-6).map(toApi), ...extra], player }));
         return { text: r.text ?? r.characters?.[0]?.text ?? '', memories: r.characters?.[0]?.memories ?? [], check_recommended: r.check_recommended };
     };
-    const checkDraft = async (speaker, text, extra = []) => {
-        const r = await timed('check', () => api.post('/v1/brains/check', { brains: groupFor([speaker]).map(n => brains.get(n)), messages: [...transcript.slice(-40).map(toApi), ...extra], draft: `${speaker}: ${text}`, player }));
-        return { ok: r.ok, issues: r.issues ?? [], fixed: cleanLine(r.fixed, speaker) };
+    const checkDraft = async (speaker, text, extra = [], fast = false) => {
+        const r = await timed('check', () => api.post('/v1/brains/check', { brains: groupFor([speaker]).map(n => brains.get(n)), messages: [...transcript.slice(-40).map(toApi), ...extra], draft: `${speaker}: ${text}`, player, ...(fast && { check: 'fast' }) }));
+        return { ok: r.ok, issues: r.issues ?? [], suspects: r.suspects ?? [], fixed: cleanLine(r.fixed, speaker) };
     };
     const chat = async (args) => {
         const t = Date.now();
@@ -338,7 +345,9 @@ export async function runBench(o) {
         meter('chat', r.usage, Date.now() - t, o.chatPrice);
         return cleanLine(r.text, args.speaker);
     };
-    // One character speaks (a free turn) or answers (a probe): their mind, the model, the check
+    // One character speaks (a free turn) or answers (a probe): their mind, the model, the check. The check as asked:
+    // always the full one; auto as the drop-in does it (the pre-check, then the auditor when the pre-check has suspects
+    // or recall recommends a check); fast, the pre-check alone (it never changes the text)
     const speak = async (speaker, { item, probe = null, hint = '' }) => {
         const extra = probe ? [{ role: probe.asker === player ? 'user' : 'assistant', ...(probe.asker !== player && { name: probe.asker }), content: probe.ask }] : [];
         let mind = NO_MIND, recalled = null;
@@ -348,13 +357,44 @@ export async function runBench(o) {
         }
         const { system, user } = chatPrompt({ story, speaker, mind, recent: recentFor(speaker), probe, hint });
         const draft = await chat({ system, user, speaker, item, probe });
-        let text = draft, issues = [];
-        if (kioriArm && (o.check === 'always' || (o.check === 'auto' && recalled?.check_recommended))) {
-            try { const c = await checkDraft(speaker, draft, extra); issues = c.issues; if (!c.ok) text = c.fixed; }
-            catch (e) { run.errors.push(`check at ${item.n ?? item.after}: ${e.message}`); }
+        let text = draft, issues = [], suspects = [];
+        if (kioriArm && o.check !== 'off') {
+            try {
+                let c = o.check === 'always' ? null : await checkDraft(speaker, draft, extra, true);
+                if (o.check === 'always' || (o.check === 'auto' && (c.suspects.length || recalled?.check_recommended))) c = await checkDraft(speaker, draft, extra);
+                ({ issues, suspects } = c);
+                if (!c.ok && o.check !== 'fast') text = c.fixed;
+            } catch (e) { run.errors.push(`check at ${item.n ?? item.after}: ${e.message}`); }
         }
-        return { draft, text, issues, recalled };
+        return { draft, text, issues, suspects, recalled };
     };
+    // What the check flagged, against the ground truth before the line: real when the speaker couldn't know the flagged
+    // words (a lie slip: the draft did slip; a lie: they keep that lie up), and the cut when the check took them out
+    const catches = (said, draftSlips = []) => said.issues.map(i => {
+        const who = i.character, row = st.K[who] ?? {};
+        const quote = String(i.quote ?? '');
+        let real;
+        if (i.type === 'lie_slip') real = draftSlips.some(x => x.speaker === who);
+        else if (i.type === 'lie') real = factsIn(story, said.draft).some(m => story.facts[m.fact].lie_of && entryOf(st, who, m.fact)?.told?.length && ['knows', 'believes_lie'].includes(entryOf(st, who, story.facts[m.fact].lie_of)?.state));
+        else {
+            const words = new Set(tokens(quote));
+            real = Object.values(story.facts).some(f => {
+                const e = row[f.id];
+                if (e && ['knows', 'believes_lie'].includes(e.state)) return false;
+                // The whole fact's canaries, and the parts they haven't got
+                const theirs = e?.state === 'half' ? (e.parts ?? []) : [];
+                const unknown = [...f.canaries, ...Object.entries(f.parts).filter(([part]) => !theirs.includes(part)).flatMap(([, cs]) => [cs].flat())];
+                return unknown.some(c => tokens(c).some(w => words.has(w)));
+            });
+        }
+        let at = said.draft.indexOf(quote);
+        if (at < 0 && quote) at = said.draft.toLowerCase().indexOf(quote.toLowerCase());
+        const word = at >= 0 ? said.draft.slice(at, at + quote.length) : null;
+        const cut = said.text !== said.draft && word && !said.text.includes(word) ? { word, at } : null;
+        return { character: who, type: i.type, quote, ...(i.why && { why: i.why }), by: i.by === 'precheck' ? 'precheck' : 'auditor', real, ...(cut && { cut }) };
+    });
+    // The last message of a scene, and what one person was there as
+    const modeIn = (scene, upTo, name) => transcript.findLast(m => m.n <= upTo && m.item.scene === scene)?.present[name] ?? null;
 
     const costBy = {}, castBy = {};
     let organizeCalls = 0, brainsSent = 0;
@@ -376,7 +416,7 @@ export async function runBench(o) {
             }
         }
         const at = transcript.length, last = replay.checkpoints.at(-1);
-        const entry = { at, kind: [kind], truth: snapshot(st), held, cost: { kiori_usd: round(cost.kiori_usd), chat_usd: round(cost.chat_usd), judge_usd: round(cost.judge_usd), estimated_usd: round(cost.estimated_usd) }, latency_ms: Object.fromEntries(Object.entries(latency).map(([k, v]) => [k, v.ms])) };
+        const entry = { at, kind: [kind], truth: truthOf(st, truth.changed), held, cost: { kiori_usd: round(cost.kiori_usd), chat_usd: round(cost.chat_usd), judge_usd: round(cost.judge_usd), estimated_usd: round(cost.estimated_usd) }, latency_ms: Object.fromEntries(Object.entries(latency).map(([k, v]) => [k, v.ms])) };
         // An organize and a probe round after the same message are one checkpoint
         if (last && last.at === at) { last.kind = [...new Set([...last.kind, kind])]; last.truth = entry.truth; last.cost = entry.cost; last.latency_ms = entry.latency_ms; if (held) last.held = { ...(last.held ?? {}), ...held }; }
         else replay.checkpoints.push(entry);
@@ -406,17 +446,21 @@ export async function runBench(o) {
             const item = items[i];
             const sid = item.scenario;
             if (sid !== markScenario) { closeScenario(markScenario); markScenario = sid; }
-            if (item.type === 'clock') { applyClock(st, item); continue; }
-            if (item.type === 'message') { applyMessage(st, item); append(item, item.text, true); }
+            if (item.type === 'clock') { applyClock(st, item); truth.step(st, Math.min(st.n, story.messages)); continue; }
+            if (item.type === 'message') { applyMessage(st, item); append(item, item.text, true); truth.step(st, item.n); }
             else if (item.type === 'free') {
                 const t = Date.now();
                 const row = rowOf(st, item.speaker), opp = opportunity(st, item.speaker);
                 const said = await speak(item.speaker, { item, hint: item.hint });
+                // Weighed before the line changes anything: what the draft would have slipped, what the check caught
+                const draftSlips = slipsIn(st, item, said.draft);
+                const issues = catches(said, draftSlips);
                 const res = applyFree(st, item, said.text);
                 append(item, said.text, false);
+                truth.step(st, item.n);
                 const draftLeaks = leaksIn(story, row, said.draft).map(l => l.fact);
-                lines.push({ n: item.n, scenario: sid, speaker: item.speaker, text: said.text, draft: said.draft, leaks: res.leaks.map(l => l.fact), draft_leaks: draftLeaks, opportunity: opp, slips: res.slips, row });
-                replay.turns.push({ n: item.n, ...(said.draft !== said.text && { draft: said.draft }), issues: said.issues, leaks: res.leaks.map(l => l.fact), ...(draftLeaks.length && { draft_leaks: draftLeaks }), ...(res.slips.length && { slips: res.slips }), ...(res.spread.length && { spread: res.spread }) });
+                lines.push({ n: item.n, scenario: sid, speaker: item.speaker, text: said.text, draft: said.draft, leaks: res.leaks.map(l => l.fact), draft_leaks: draftLeaks, opportunity: opp, slips: res.slips, draft_slips: draftSlips, issues, suspects: said.suspects, row });
+                replay.turns.push({ n: item.n, ...(said.draft !== said.text && { draft: said.draft }), changed: said.draft !== said.text, block: said.recalled ? blockRef(replay, said.recalled.text) : null, ...(said.suspects.length && { suspects: said.suspects }), issues, leaks: res.leaks.map(l => l.fact), ...(draftLeaks.length && { draft_leaks: draftLeaks }), ...(res.slips.length && { slips: res.slips }), ...(draftSlips.length && { draft_slips: draftSlips }), ...(res.spread.length && { spread: res.spread }) });
                 turnMs.push(Date.now() - t);
             } else if (item.type === 'probe') {
                 // A round: every probe asked after this same message, each on the same fork of the story
@@ -424,11 +468,15 @@ export async function runBench(o) {
                 while (items[i + 1]?.type === 'probe' && items[i + 1].after === item.after) round.push(items[++i]);
                 for (const p of round) {
                     clock(st, p.world_time);
+                    truth.step(st, Math.min(st.n, story.messages));
                     const row = rowOf(st, p.target), opp = opportunity(st, p.target);
                     const said = await speak(p.target, { item: p, probe: p });
-                    const rec = { ...p, answer: said.text, draft: said.draft, row, opportunity: opp };
+                    const issues = catches(said);
+                    const rec = { ...p, answer: said.text, draft: said.draft, row, opportunity: opp, issues, suspects: said.suspects };
                     probes.push(rec);
-                    replay.probes.push({ id: p.id, at: p.after, scenario: p.scenario, target: p.target, asker: p.asker, ask: p.ask, facts: p.facts, answer: said.text, ...(said.draft !== said.text && { draft: said.draft }), ...(said.issues.length && { issues: said.issues }), held: said.recalled ? heldOf(replay, said.recalled) : null });
+                    // What the one asking could know of the facts asked about, and how the target was there last
+                    const askerKnows = truthOf({ K: { [p.asker]: Object.fromEntries(p.facts.filter(f => st.K[p.asker]?.[f]).map(f => [f, st.K[p.asker][f]])) } }, truth.changed)[p.asker] ?? {};
+                    replay.probes.push({ id: p.id, at: p.after, scenario: p.scenario, target: p.target, asker: p.asker, ask: p.ask, facts: p.facts, target_mode: modeIn(p.scene, p.after, p.target), asker_knows: askerKnows, answer: said.text, ...(said.draft !== said.text && { draft: said.draft }), changed: said.draft !== said.text, ...(said.suspects.length && { suspects: said.suspects }), ...(issues.length && { issues }), held: said.recalled ? heldOf(replay, said.recalled) : null });
                 }
                 await checkpoint('probes');
                 continue;
@@ -448,7 +496,7 @@ export async function runBench(o) {
     replay.metrics = await score(record, { judge });
     replay.probes.forEach((p, k) => { p.score = probes[k].score; });
     replay.metrics.cost = { ...replay.metrics.cost, ...(judge && { judge_usd: round(cost.judge_usd) }) };
-    replay.checkpoints.push({ at: transcript.length, kind: ['end'], truth: snapshot(st), held: kioriArm ? Object.fromEntries(await Promise.all(main.filter(n => brains.has(n)).map(async n => [n, heldOf(replay, await recallFor(n))]))) : null, cost: { kiori_usd: round(cost.kiori_usd), chat_usd: round(cost.chat_usd), judge_usd: round(cost.judge_usd), estimated_usd: round(cost.estimated_usd) }, latency_ms: Object.fromEntries(Object.entries(latency).map(([k, v]) => [k, v.ms])) });
+    replay.checkpoints.push({ at: transcript.length, kind: ['end'], truth: truthOf(st, truth.changed), held: kioriArm ? Object.fromEntries(await Promise.all(main.filter(n => brains.has(n)).map(async n => [n, heldOf(replay, await recallFor(n))]))) : null, cost: { kiori_usd: round(cost.kiori_usd), chat_usd: round(cost.chat_usd), judge_usd: round(cost.judge_usd), estimated_usd: round(cost.estimated_usd) }, latency_ms: Object.fromEntries(Object.entries(latency).map(([k, v]) => [k, v.ms])) });
     run.finished = new Date().toISOString();
     if (stopped) run.stopped = stopped;
     await local?.close();
@@ -468,10 +516,10 @@ export function summary(m) {
     const pct = v => (v == null ? '  n/a' : `${(v * 100).toFixed(1).padStart(5)}%`);
     return [
         `messages ${m.messages}, free lines ${m.lines}, probes ${m.probes}`,
-        `  leak rate                ${pct(m.leak_rate)}   (${m.leaks} of ${m.opportunities} chances; drafts before check ${pct(m.leak_rate_drafts)}, caught by check ${m.caught_by_check})`,
+        `  leak rate                ${pct(m.leak_rate)}   (${m.leaks} of ${m.opportunities} chances; drafts before check ${pct(m.leak_rate_drafts)}, caught by check ${m.caught_by_check}: caught by precheck ${m.caught_by_precheck}, by auditor ${m.caught_by_auditor})`,
         `  false-ignorance rate     ${pct(m.false_ignorance_rate)}`,
         `  attribution accuracy     ${pct(m.attribution_accuracy)}`,
-        `  lie consistency          ${pct(m.lie_consistency)}   (slips in free lines: ${m.lie_slips})`,
+        `  lie consistency          ${pct(m.lie_consistency)}   (drafts ${pct(m.lie_consistency_drafts)}; slips in free lines: ${m.lie_slips}, in drafts ${m.lie_slips_drafts}; lie slips flagged by check ${m.lie_slips_flagged}, ${m.lie_slips_flagged_real} real; lies flagged ${m.lies_flagged})`,
         `  gossip propagation F1    ${m.propagation_f1 == null ? '  n/a' : m.propagation_f1.toFixed(3).padStart(6)}   (tp ${m.propagation.tp}, fp ${m.propagation.fp}, fn ${m.propagation.fn})`,
         `  half-heard vagueness     ${pct(m.half_vagueness)}`,
         `  judged ${m.judged}, undecided without a judge ${m.undecided}`,

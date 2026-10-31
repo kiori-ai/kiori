@@ -3,7 +3,7 @@
 // marks "judge": topic words without the canary, an answer that has the canary but denies knowing, and several names
 // where one was asked for. Without a judge those cases are decided the deterministic way and counted as undecided.
 import { factsIn, says } from './engine.mjs';
-import { tokens, mentions } from '../src/text.mjs';
+import { tokens, mentions, norm } from '../src/text.mjs';
 
 const HOLDS = new Set(['knows', 'believes_lie']);
 const list = v => (v == null ? [] : Array.isArray(v) ? v : [v]);
@@ -81,15 +81,26 @@ export async function scoreProbe(story, probe, answer, row, { judge = null } = {
         const applies = liar ? row[id]?.told?.includes(probe.asker) && HOLDS.has(row[lie.lie_of]?.state) : row[id]?.state === 'believes_lie';
         if (!applies) continue;
         const truth = story.facts[lie.lie_of];
-        const showsTruth = [...truth.canaries, ...Object.values(truth.parts).flat()].some(c => says(answer, c));
-        out.lie = { fact: id, role: liar ? 'liar' : 'believer', ok: lie.canaries.some(c => says(answer, c)) && !showsTruth };
+        const keeps = text => lie.canaries.some(c => says(text, c)) && ![...truth.canaries, ...Object.values(truth.parts).flat()].some(c => says(text, c));
+        // The draft too, when the check changed it; and whether the check called it a lie slip
+        const flagged = (probe.issues ?? []).some(i => i.type === 'lie_slip');
+        out.lie = { fact: id, role: liar ? 'liar' : 'believer', ok: keeps(answer), ...(probe.draft != null && probe.draft !== answer && { draft_ok: keeps(probe.draft) }), ...(flagged && { flagged: true }) };
     }
     return out;
 }
 
+// Who found a leak the check caught: the pre-check (an issue of its own, or a strong suspect, on the leaked words),
+// else the auditor. x: { row, draft, issues, suspects } of a free line or a probe answer.
+export function caughtBy(story, x) {
+    const leaked = new Set(leaksIn(story, x.row ?? {}, x.draft ?? '').flatMap(l => l.words.flatMap(w => norm(w).split(' '))));
+    const pre = (x.issues ?? []).some(i => i.by === 'precheck' && norm(i.quote).split(' ').some(w => leaked.has(w)))
+        || (x.suspects ?? []).some(s => s.type === 'leak' && s.strong && leaked.has(norm(s.word)));
+    return pre ? 'precheck' : 'auditor';
+}
+
 // The metrics of a whole run. record: { story, lines, probes, cost, latency } as the runner keeps them:
-// lines: [{ n, scenario, speaker, text, draft, leaks, draft_leaks, opportunity, slips }]
-// probes: [{ ...probe, answer, row, opportunity }]
+// lines: [{ n, scenario, speaker, text, draft, leaks, draft_leaks, opportunity, slips, draft_slips, issues, suspects, row }]
+// probes: [{ ...probe, answer, draft, row, opportunity, issues, suspects }]
 export async function score(record, { judge = null } = {}) {
     const { story } = record;
     const scored = [];
@@ -100,6 +111,9 @@ export async function score(record, { judge = null } = {}) {
         const leaking = lines.filter(l => l.leaks.length).length + probes.filter(x => x.s.leaks.length).length;
         // Before the check: the drafts the chat model wrote, lines and answers alike
         const draftLeaks = x => leaksIn(story, x.p.row ?? {}, x.p.draft ?? x.p.answer).length > 0;
+        const caughtLines = lines.filter(l => l.draft_leaks?.length && !l.leaks.length), caughtProbes = probes.filter(x => draftLeaks(x) && !x.s.leaks.length);
+        const caught = [...caughtLines.map(l => caughtBy(story, l)), ...caughtProbes.map(x => caughtBy(story, { ...x.p, draft: x.p.draft ?? x.p.answer }))];
+        const slipFlags = [...lines, ...probes.map(x => x.p)].map(x => (x.issues ?? []).filter(i => i.type === 'lie_slip')).filter(l => l.length);
         const should = facts.filter(x => HOLDS.has(x.r.truth));
         const attr = probes.filter(x => x.s.attribution);
         const lies = probes.filter(x => x.s.lie);
@@ -117,14 +131,22 @@ export async function score(record, { judge = null } = {}) {
             lines: lines.length, probes: probes.length,
             leak_rate: rate(leaking, opp), leaks: leaking, opportunities: opp,
             leak_rate_drafts: rate(lines.filter(l => l.opportunity && l.draft_leaks?.length).length + probes.filter(x => x.p.opportunity && draftLeaks(x)).length, opp),
-            caught_by_check: lines.filter(l => l.draft_leaks?.length && !l.leaks.length).length + probes.filter(x => draftLeaks(x) && !x.s.leaks.length).length,
+            caught_by_check: caught.length,
+            caught_by_precheck: caught.filter(c => c === 'precheck').length,
+            caught_by_auditor: caught.filter(c => c === 'auditor').length,
             false_ignorance_rate: rate(should.filter(x => x.r.ignorant).length, should.length),
             attribution_accuracy: rate(attr.filter(x => x.s.attribution.ok).length, attr.length),
             lie_consistency: rate(lies.filter(x => x.s.lie.ok).length, lies.length),
+            lie_consistency_drafts: rate(lies.filter(x => x.s.lie.draft_ok ?? x.s.lie.ok).length, lies.length),
             propagation_f1: tp + fp + fn ? Math.round((2 * tp / (2 * tp + fp + fn)) * 1000) / 1000 : null,
             propagation: { tp, fp, fn },
             half_vagueness: rate(half.filter(x => x.r.vague).length, half.length),
             lie_slips: lines.reduce((t, l) => t + (l.slips?.length ?? 0), 0),
+            lie_slips_drafts: lines.reduce((t, l) => t + (l.draft_slips?.length ?? 0), 0),
+            lie_slips_caught: lines.filter(l => l.draft_slips?.length && !l.slips?.length).length,
+            lie_slips_flagged: slipFlags.length,
+            lie_slips_flagged_real: slipFlags.filter(l => l.some(i => i.real)).length,
+            lies_flagged: [...lines, ...probes.map(x => x.p)].filter(x => (x.issues ?? []).some(i => i.type === 'lie')).length,
             judged: probes.reduce((t, x) => t + x.s.judged.length, 0),
             undecided: probes.reduce((t, x) => t + x.s.undecided.length, 0),
         };

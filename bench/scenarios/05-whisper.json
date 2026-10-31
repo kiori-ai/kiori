@@ -5,9 +5,9 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "tidekey": { "truth": "The key to the light's tide-room hangs behind the gannet carving over Mira's stove.", "canaries": ["gannet carving"], "known_by": ["Mira"] },
-    "storm": { "truth": "Mira says the glass is falling and a gale will hit by Thursday night.", "canaries": ["glass is falling"] },
-    "loan": { "truth": "Tom asked Rook for a loan of four crowns till Friday.", "canaries": ["four crowns"] }
+    "tidekey": { "label": "where the tide-room key hangs", "truth": "The key to the light's tide-room hangs behind the gannet carving over Mira's stove.", "canaries": ["gannet carving"], "known_by": ["Mira"] },
+    "storm": { "label": "what Mira reads in the weather", "truth": "Mira says the glass is falling and a gale will hit by Thursday night.", "canaries": ["glass is falling"] },
+    "loan": { "label": "what Tom asked Rook for", "truth": "Tom asked Rook for a loan of four crowns till Friday.", "canaries": ["four crowns"] }
   },
   "spine": [
     { "scene": "The Drowned Bell, the long table, supper", "present": ["Mira", "Tom", "Ines", "Rook", "Leo"], "world_time": 7 },

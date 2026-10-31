@@ -5,8 +5,8 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "estate": { "truth": "Leo's money is his late mother's estate from the Lindqvist mill, paid by a solicitor in Arnby.", "canaries": ["Lindqvist"], "known_by": ["Leo"] },
-    "bellsale": { "truth": "(false) Leo pays his way by having sold the Halcyon's salvaged bell to a collector in Port Avel.", "canaries": ["Port Avel"], "lie_of": "estate", "believed_by": ["Tom"] }
+    "estate": { "label": "where Leo's money really comes from", "truth": "Leo's money is his late mother's estate from the Lindqvist mill, paid by a solicitor in Arnby.", "canaries": ["Lindqvist"], "known_by": ["Leo"] },
+    "bellsale": { "label": "the story about Leo's money", "truth": "(false) Leo pays his way by having sold the Halcyon's salvaged bell to a collector in Port Avel.", "canaries": ["Port Avel"], "lie_of": "estate", "believed_by": ["Tom"] }
   },
   "spine": [
     { "scene": "The Drowned Bell, early evening", "present": ["Tom", "Ines", "Rook"], "world_time": 14 },

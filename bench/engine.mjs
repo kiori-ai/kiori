@@ -69,7 +69,7 @@ export function loadStory(scenarios, cast = { people: {}, npcs: {} }) {
         for (const name of sc.npcs ?? []) person(name);
         for (const [id, f] of Object.entries(sc.facts ?? {})) {
             if (!f.truth || !list(f.canaries).length) fail(`${sc.id}: fact "${id}" needs truth and canaries`);
-            story.facts[ns(id)] = { id: ns(id), scenario: sc.id, truth: f.truth, canaries: list(f.canaries), parts: f.parts ?? {}, lie_of: f.lie_of ? ns(f.lie_of) : null, known_by: list(f.known_by), believed_by: list(f.believed_by) };
+            story.facts[ns(id)] = { id: ns(id), scenario: sc.id, label: f.label ?? '', truth: f.truth, canaries: list(f.canaries), parts: f.parts ?? {}, lie_of: f.lie_of ? ns(f.lie_of) : null, known_by: list(f.known_by), believed_by: list(f.believed_by) };
         }
         for (const f of Object.values(story.facts)) if (f.scenario === sc.id && f.lie_of && !story.facts[f.lie_of]) fail(`${sc.id}: ${f.id} is a lie of a fact that doesn't exist`);
         const from = n + 1;
@@ -252,12 +252,20 @@ export function applyFree(st, item, text) {
         }
         if (legit) tell(st, speaker, m.fact, hearers);
     }
+    slips.push(...slipsIn(st, item, text, found));
+    return { leaks, slips, spread };
+}
+
+// A liar who says the truth whole in front of someone they lied to, in this line: the slips it would make. Pure (it
+// changes nothing), so a draft can be weighed before the check, against the state before the line.
+export function slipsIn(st, item, text, found = factsIn(st.story, text)) {
+    const speaker = item.speaker ?? item.who, slips = [];
     for (const lie of Object.values(st.story.facts)) {
         const told = entry(st, speaker, lie.id)?.told ?? [];
         const victims = told.filter(v => item.present[v] && HEARS[item.present[v]] !== 'none');
         if (lie.lie_of && victims.length && found.some(m => m.fact === lie.lie_of && m.full) && holds(st, speaker, lie.lie_of)) slips.push({ n: item.n, speaker, fact: lie.id, to: victims });
     }
-    return { leaks, slips, spread };
+    return slips;
 }
 
 // Is this a chance to leak: is there a fact someone holds by now that this person doesn't fully know?
@@ -327,7 +335,8 @@ export function perceive(story, item, name, text = item.text) {
 // ---------- Checking a scenario ----------
 // What's wrong with a story as written, played on its spine alone: a canary in a spine line that the line doesn't
 // declare (or a declared fact whose words aren't there), a probe question or a free-turn hint that gives a canary
-// away, a probe whose expectation the ground truth doesn't bear out, and a scenario outside 60-150 messages.
+// away, a fact without a label or with one that gives a canary away, a probe whose expectation the ground truth doesn't
+// bear out, and a scenario outside 60-150 messages.
 export function lint(story) {
     const problems = [], refFact = r => `${r.fact}${r.parts ? `.${r.parts[0]}` : ''}`;
     for (const item of story.items) {
@@ -342,6 +351,11 @@ export function lint(story) {
         }
         const asked = item.type === 'probe' ? item.ask : item.type === 'free' ? item.hint : '';
         for (const m of factsIn(story, asked)) problems.push(`${item.type === 'probe' ? item.id : `#${item.n} hint`}: gives away "${m.words[0]}"`);
+    }
+    // A fact's label is what the playground shows before anyone knows it: there, and giving nothing away
+    for (const f of Object.values(story.facts)) {
+        if (!String(f.label ?? '').trim()) problems.push(`${f.id}: no label`);
+        for (const m of factsIn(story, f.label ?? '')) problems.push(`${f.id} label: gives away "${m.words[0]}"${m.fact === f.id ? '' : ` (${m.fact})`}`);
     }
     const { probes } = runSpine(story);
     for (const { probe: p, row } of probes) {

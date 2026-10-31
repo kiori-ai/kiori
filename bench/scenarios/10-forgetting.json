@@ -5,8 +5,8 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "debt": { "truth": "Tom owes forty crowns to the widow Ashby, and she has given him till the new moon.", "canaries": ["Ashby"] },
-    "cure": { "truth": "Mira has told Ines to drink willowbark tea three times a day and keep off the stairs for a week.", "canaries": ["willowbark"] }
+    "debt": { "label": "whom Tom owes, and how much", "truth": "Tom owes forty crowns to the widow Ashby, and she has given him till the new moon.", "canaries": ["Ashby"] },
+    "cure": { "label": "Mira's orders for Ines", "truth": "Mira has told Ines to drink willowbark tea three times a day and keep off the stairs for a week.", "canaries": ["willowbark"] }
   },
   "spine": [
     { "scene": "The Drowned Bell, late evening, frost", "present": ["Tom", "Ines", "Rook"], "world_time": 18 },

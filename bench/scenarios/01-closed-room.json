@@ -5,9 +5,9 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "ledger": { "truth": "Mira keeps the Halcyon's real logbook hidden inside the old fog-bell housing in the lamp room.", "canaries": ["fog-bell housing", "fog bell housing"], "known_by": ["Mira"] },
-    "pilot": { "truth": "The logbook's last entry shows the harbor pilot Aurelio Penhallow was at the Halcyon's wheel, drunk.", "canaries": ["Penhallow"], "known_by": ["Mira"] },
-    "price": { "truth": "Ines has raised the price of a room at the Drowned Bell to nine shillings.", "canaries": ["nine shillings"] }
+    "ledger": { "label": "where Mira keeps the real logbook", "truth": "Mira keeps the Halcyon's real logbook hidden inside the old fog-bell housing in the lamp room.", "canaries": ["fog-bell housing", "fog bell housing"], "known_by": ["Mira"] },
+    "pilot": { "label": "who was at the Halcyon's wheel", "truth": "The logbook's last entry shows the harbor pilot Aurelio Penhallow was at the Halcyon's wheel, drunk.", "canaries": ["Penhallow"], "known_by": ["Mira"] },
+    "price": { "label": "what a room at the Bell costs now", "truth": "Ines has raised the price of a room at the Drowned Bell to nine shillings.", "canaries": ["nine shillings"] }
   },
   "spine": [
     { "scene": "Saltmere Light, the lamp room, dusk", "present": ["Mira", "Leo"], "world_time": 0 },

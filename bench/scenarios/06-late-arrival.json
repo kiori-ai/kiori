@@ -5,9 +5,9 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "rudder": { "truth": "The Petrel's rudder pin sheared in the swell and the tiller nearly broke Tom's wrist.", "canaries": ["rudder pin"] },
-    "bribe": { "truth": "The harbor master takes purses from the Corran brothers to look the other way when they land at night.", "canaries": ["Corran"] },
-    "ferry": { "truth": "The Saltmere ferry is being sold to a Greyhaven company.", "canaries": ["Greyhaven"] }
+    "rudder": { "label": "what broke on the Petrel", "truth": "The Petrel's rudder pin sheared in the swell and the tiller nearly broke Tom's wrist.", "canaries": ["rudder pin"] },
+    "bribe": { "label": "who pays the harbor master", "truth": "The harbor master takes purses from the Corran brothers to look the other way when they land at night.", "canaries": ["Corran"] },
+    "ferry": { "label": "who is buying the ferry", "truth": "The Saltmere ferry is being sold to a Greyhaven company.", "canaries": ["Greyhaven"] }
   },
   "spine": [
     { "scene": "The Drowned Bell, the back table, morning", "present": ["Ines", "Mira", "Leo", "Tom"], "world_time": 8 },

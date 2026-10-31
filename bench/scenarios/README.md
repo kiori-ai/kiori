@@ -26,9 +26,9 @@ The cast is in `cast.json`: Mira (keeper of the light), Tom (her brother), Ines 
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "npcs": [],
   "facts": {
-    "crate": { "truth": "Tom hid a crate of Velloran brandy under the sawdust in the old ice-house.",
+    "crate": { "label": "what Tom hid that night", "truth": "Tom hid a crate of Velloran brandy under the sawdust in the old ice-house.",
                "canaries": ["Velloran", "under the sawdust"], "parts": { "where": ["ice-house"] }, "known_by": ["Tom"] },
-    "alibi": { "truth": "(false) Tom says he spent the night at Old Hennick's.", "canaries": ["Hennick"], "lie_of": "crate" }
+    "alibi": { "label": "where Tom says he was", "truth": "(false) Tom says he spent the night at Old Hennick's.", "canaries": ["Hennick"], "lie_of": "crate" }
   },
   "spine": [
     { "scene": "The end of the quay, past midnight", "present": ["Tom", { "name": "Rook", "mode": "saw" }], "world_time": 3 },
@@ -44,6 +44,7 @@ The cast is in `cast.json`: Mira (keeper of the light), Tom (her brother), Ines 
 
 | Field | |
 |---|---|
+| `label` | A few words that name the fact without giving it away ("what Tom hid that night"): what the playground shows before anyone knows it. Never a canary or a part. |
 | `truth` | The fact in one sentence. A false one starts with "(false)". |
 | `canaries` | Unique, unguessable words that only this fact produces ("Velloran", "19 Ropewalk"). Saying one is knowing the fact. |
 | `parts` | Named pieces of the fact, each with its own canaries: what a half-heard or half-seen version can hold (the street, not the house number). |
@@ -99,7 +100,7 @@ On a message:
 `lint` in `bench/engine.mjs` checks all of these, and the tests run it on every scenario and on the season:
 
 - Every canary in a spine line is declared on that line, and every declared fact's words are in its text.
-- Probe questions and free-turn hints never contain a canary or a part.
+- Probe questions, free-turn hints and fact labels never contain a canary or a part, and every fact has a label.
 - Every probe's expectation holds in the ground truth of the spine alone.
 - A scenario has 60 to 150 messages.
 

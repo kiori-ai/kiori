@@ -5,9 +5,9 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "father": { "truth": "Leo's father was second mate on the Halcyon, and his hand on the wheel put her onto the Gannet Teeth.", "canaries": ["Gannet Teeth"], "known_by": ["Mira"] },
-    "garble": { "truth": "(false) Leo's father was the Halcyon's cook and poisoned the crew with bilge-salt in their stew.", "canaries": ["bilge-salt", "bilge salt"], "lie_of": "father" },
-    "automatic": { "truth": "The Lighthouse Board will replace Mira with an automatic lamp in the spring.", "canaries": ["automatic lamp"] }
+    "father": { "label": "what Leo's father did on the Halcyon", "truth": "Leo's father was second mate on the Halcyon, and his hand on the wheel put her onto the Gannet Teeth.", "canaries": ["Gannet Teeth"], "known_by": ["Mira"] },
+    "garble": { "label": "the garbled story about Leo's father", "truth": "(false) Leo's father was the Halcyon's cook and poisoned the crew with bilge-salt in their stew.", "canaries": ["bilge-salt", "bilge salt"], "lie_of": "father" },
+    "automatic": { "label": "the Board's plans for the light", "truth": "The Lighthouse Board will replace Mira with an automatic lamp in the spring.", "canaries": ["automatic lamp"] }
   },
   "spine": [
     { "scene": "Saltmere Light, the keeper's kitchen, morning", "present": ["Mira", "Tom"], "world_time": 2 },

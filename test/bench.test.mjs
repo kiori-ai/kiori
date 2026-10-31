@@ -10,8 +10,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadStory, runSpine, snapshot, lint, factsIn, newState, applyMessage, applyFree, applyClock, perceive, stateOf, entry } from '../bench/engine.mjs';
 import { scoreProbe } from '../bench/scorer.mjs';
-import { parseArgs, runBench, spending, estimate, loadScenarios, apiMessage, chatPrompt } from '../bench/run.mjs';
-import { validateReplay } from '../bench/replay.mjs';
+import { parseArgs, runBench, spending, estimate, loadScenarios, apiMessage, chatPrompt, summary } from '../bench/run.mjs';
+import { validateReplay, CAST_COLORS } from '../bench/replay.mjs';
+import { linesOf } from '../bench/fake.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCENARIOS = path.join(ROOT, 'bench', 'scenarios');
@@ -41,6 +42,23 @@ test('scenarios: all eleven load, pass the lint, and make a season of 60-150 mes
     assert.deepEqual(lint(season), [], 'the season: no canary of one scenario turns up in another');
     // Scenario 11 is the town: forty walk-ons besides the four characters
     assert.equal(Object.values(season.people).filter(p => p.role === 'npc').length, 40);
+});
+
+test('scenarios: every fact has a label, and the lint catches one that is missing or gives a canary away', () => {
+    for (const f of files) for (const [id, fact] of Object.entries(JSON.parse(fs.readFileSync(path.join(SCENARIOS, f), 'utf8')).facts)) assert.ok(fact.label?.trim(), `${f}: ${id} has a label`);
+    const story = facts => loadStory([{ id: 't', player: 'Leo', cast: ['Mira'], facts, spine: [{ scene: 'here', present: ['Mira', 'Leo'] }, { who: 'STORY', text: 'Rain.' }] }], cast);
+    const problems = lint(story({
+        a: { label: 'where the key hangs', truth: 'The key is under the gannet stone.', canaries: ['gannet stone'], parts: { what: ['the key'] } },
+        b: { label: 'what is under the gannet stone', truth: 'A ring is buried there.', canaries: ['whalebone hoard'] },
+        c: { truth: 'Nobody labelled this.', canaries: ['plover cairn'] },
+        d: { label: 'what Mira found in the plover cairn', truth: 'A letter.', canaries: ['tarred letter'] },
+    })).filter(p => !/messages \(60-150\)/.test(p));
+    assert.deepEqual(problems, [
+        't:a label: gives away "the key"',
+        't:b label: gives away "gannet stone" (t:a)',
+        't:c: no label',
+        't:d label: gives away "plover cairn" (t:c)',
+    ]);
 });
 
 test('scenarios: every canary and part names its own fact only, and no one is named by one', () => {
@@ -289,6 +307,28 @@ test('scorer: the oracle answers from the ground truth and scores no leaks, full
     assert.equal(m.undecided, 0);
     assert.ok(m.opportunities > 300 && m.probes === 106);
     assert.deepEqual(validateReplay(replay), []);
+    // A version 2 replay of the season: labels, the people as the playground draws them, and the truth as deltas
+    assert.equal(replay.replay, 2);
+    assert.equal(replay.facts['s3:crate'].label, 'what Tom hid that night');
+    assert.deepEqual(replay.people.Mira, { role: 'character', groups: ['light'], who: cast.people.Mira.who, voice: cast.people.Mira.voice, color: CAST_COLORS.Mira, portrait: 'img/cast/mira.jpg' });
+    assert.equal(new Set(['Leo', 'Mira', 'Tom', 'Ines', 'Rook'].map(n => replay.people[n].color)).size, 5);
+    assert.ok(/^#[0-9a-f]{6}$/.test(replay.people['Jory Fenn'].color) && replay.people['Jory Fenn'].portrait === '');
+    // Playing the deltas through gives the end table: every state, at the message it changed
+    const played = {};
+    for (const d of replay.deltas) (played[d.person] ??= {})[d.fact] = d.state;
+    const end = replay.checkpoints.at(-1).truth;
+    for (const row of Object.values(played)) for (const [f, st] of Object.entries(row)) if (st === 'none') delete row[f];
+    assert.deepEqual(Object.fromEntries(Object.entries(played).filter(([, row]) => Object.keys(row).length)), Object.fromEntries(Object.entries(end).map(([n, row]) => [n, Object.fromEntries(Object.entries(row).map(([f, e]) => [f, e[0]]))])));
+    // Ines forgets the debt at #25 of s10 (the season's message 25 + the first nine scenarios)
+    const s10 = replay.scenarios.find(s => s.id === 's10');
+    assert.deepEqual(replay.deltas.find(d => d.person === 'Ines' && d.fact === 's10:debt' && d.state === 'none'), { n: s10.from + 24, person: 'Ines', fact: 's10:debt', state: 'none', forgot: true });
+    // The lie Leo saw through at #31 of s3: a delta at that message, and the tuple with when it was exposed
+    const s3 = replay.scenarios.find(s => s.id === 's3');
+    assert.ok(replay.deltas.some(d => d.n === s3.from + 30 && d.person === 'Leo' && d.fact === 's3:alibi' && d.exposed === true));
+    assert.deepEqual(end.Leo['s3:alibi'], ['knows', 'Tom', null, s3.from + 14, null, s3.from + 30, s3.from + 30]);
+    // A probe knows how its target was there, and what the one asking held of what they asked
+    const p1 = replay.probes.find(p => p.id === 's3-p1');
+    assert.deepEqual([p1.target_mode, p1.asker_knows], ['full', { 's3:alibi': ['believes_lie', 'Tom', null, s3.from + 14] }]);
     // The same oracle behind the transcript filter
     const filtered = await runBench(parseArgs(['--scenario', '3,4', '--arm', 'oracle-filter', '--chat-model', 'fake/oracle', '--out', out]));
     assert.deepEqual([filtered.metrics.leak_rate, filtered.metrics.attribution_accuracy, filtered.metrics.lie_consistency], [0, 1, 1]);
@@ -391,7 +431,7 @@ test('runner: the given-presence arm on scenario 5; a broken replay is caught by
     assert.equal(r.status, 0, r.stderr);
     const replay = JSON.parse(fs.readFileSync(r.stdout.match(/replay: (.+\.replay\.json)/)[1], 'utf8'));
     assert.deepEqual(validateReplay(replay), []);
-    assert.equal(replay.run.options.present_as, 'hearers');
+    assert.equal(replay.run.options.present_as, 'modes', 'the server reads modes: they are sent by default');
     // The whisper: the others at the table saw it, and the ground truth keeps their modes
     assert.deepEqual(replay.messages[10].present, { Mira: 'full', Tom: 'saw', Ines: 'saw', Rook: 'saw', Leo: 'full' });
     const broken = structuredClone(replay);
@@ -401,6 +441,74 @@ test('runner: the given-presence arm on scenario 5; a broken replay is caught by
     const problems = validateReplay(broken);
     assert.ok(problems.some(p => /message 4: present/.test(p)) && problems.some(p => /Tom\/s5:storm/.test(p)) && problems.some(p => /metrics/.test(p)), problems.join('; '));
     fs.rmSync(out, { recursive: true, force: true });
+});
+
+test('runner: scenario 3 on the fake organizer: sources, told records and the lie reach the replay; every free turn has its block', () => {
+    const out = tmp();
+    const r = runCli(['--scenario', '3', '--arm', 'kiori', '--fake', '--out', out, '--quiet']);
+    assert.equal(r.status, 0, r.stderr);
+    const text = fs.readFileSync(r.stdout.match(/replay: (.+\.replay\.json)/)[1], 'utf8');
+    const replay = JSON.parse(text);
+    assert.deepEqual(validateReplay(replay), []);
+    assert.ok((text.match(/"lie":true/g) ?? []).length >= 1, 'a lie record');
+    assert.ok(/"source":\{"how":"(?:heard|told)","by":"/.test(text), 'a memory with whom it came from');
+    const lie = Object.values(replay.memories).find(m => m.lie);
+    assert.deepEqual([lie.kind, lie.told_to, /Hennick/.test(lie.title)], ['told', ['Ines', 'Leo'], true]);
+    // Ines passing on Tom's story to Mira (#40) is hearsay; the origin isn't kept, since her line doesn't name him
+    assert.ok(Object.values(replay.memories).some(m => m.source?.how === 'told' && m.source.by === 'Ines' && !m.source.origin), 'hearsay, from whom it was heard');
+    // What Kiori held is there at every free turn, and every catch says who made it and whether it was real
+    assert.ok(replay.turns.length === 24 && replay.turns.every(t => Number.isInteger(t.block) && replay.blocks[t.block] && typeof t.changed === 'boolean'));
+    assert.ok(replay.turns.flatMap(t => t.issues).every(i => ['precheck', 'auditor'].includes(i.by) && typeof i.real === 'boolean'));
+    for (const t of replay.turns.filter(x => x.changed)) for (const i of t.issues.filter(x => x.cut)) assert.equal(t.draft.slice(i.cut.at, i.cut.at + i.cut.word.length), i.cut.word);
+    fs.rmSync(out, { recursive: true, force: true });
+});
+
+test('runner: the metrics line counts what the pre-check caught apart from what the auditor caught', async () => {
+    const out = tmp();
+    const r = runCli(['--scenario', '7', '--arm', 'kiori-given-presence', '--chat-model', 'fake/leaky', '--fake', '--out', out, '--quiet']);
+    assert.equal(r.status, 0, r.stderr);
+    const [, all, pre, aud] = r.stdout.match(/caught by check (\d+): caught by precheck (\d+), by auditor (\d+)/).map(Number);
+    assert.ok(pre >= 1 && aud >= 1 && pre + aud === all, r.stdout);
+    const replay = JSON.parse(fs.readFileSync(r.stdout.match(/replay: (.+\.replay\.json)/)[1], 'utf8'));
+    assert.deepEqual([replay.metrics.caught_by_precheck, replay.metrics.caught_by_auditor], [pre, aud]);
+    assert.ok(replay.turns.some(t => t.suspects?.some(s => s.strong)), 'the pre-check\'s suspects are kept');
+    const issues = [...replay.turns, ...replay.probes].flatMap(t => t.issues ?? []);
+    assert.ok(issues.some(i => i.real && i.cut) && issues.some(i => !i.real), 'real catches, cut where they were, and false alarms');
+    assert.match(summary(replay.metrics), /lie slips flagged by check \d+, \d+ real/);
+    fs.rmSync(out, { recursive: true, force: true });
+});
+
+test('replay: version 1 files still validate; version 2 needs its new fields', async () => {
+    const out = tmp();
+    const { replay } = await runBench(parseArgs(['--scenario', '3', '--arm', 'no-kiori', '--chat-model', 'fake/leaky', '--out', out]));
+    fs.rmSync(out, { recursive: true, force: true });
+    assert.deepEqual(validateReplay(replay), []);
+    // The same run as version 1 wrote it
+    const v1 = structuredClone(replay);
+    v1.replay = 1;
+    delete v1.deltas;
+    for (const f of Object.values(v1.facts)) delete f.label;
+    for (const p of Object.values(v1.people)) { delete p.who; delete p.voice; delete p.color; delete p.portrait; }
+    for (const t of v1.turns) { delete t.changed; delete t.block; delete t.suspects; delete t.draft_slips; t.issues = t.issues.map(({ by, real, cut, ...i }) => i); }
+    for (const p of v1.probes) { delete p.target_mode; delete p.asker_knows; delete p.changed; delete p.suspects; }
+    for (const c of v1.checkpoints) for (const row of Object.values(c.truth)) for (const [f, e] of Object.entries(row)) row[f] = e[0] === 'half' ? e.slice(0, 5) : e.slice(0, 4);
+    assert.deepEqual(validateReplay(v1), []);
+    // ...which isn't a version 2 file
+    const problems = validateReplay({ ...v1, replay: 2 });
+    for (const want of [/deltas is a list/, /fact s3:crate needs a label/, /person Mira: role, who, voice, color/, /turn \d+: changed, block/, /probe s3-p1: target_mode/]) assert.ok(problems.some(p => want.test(p)), `${want}: ${problems.slice(0, 8).join('; ')}`);
+    assert.ok(validateReplay({ ...replay, replay: 3 }).some(p => /replay must be 2/.test(p)));
+    // A delta out of order, or about someone nobody knows, is caught
+    const broken = structuredClone(replay);
+    broken.deltas.push({ n: 1, person: 'Nobody', fact: 's3:crate', state: 'knows' });
+    assert.ok(validateReplay(broken).some(p => /delta at 1 \(Nobody\/s3:crate\): n is a message number, in order/.test(p)) && validateReplay(broken).some(p => /a known person and fact/.test(p)));
+});
+
+test('fake provider: a speaker\'s mode mark and the player mark are not part of the name', () => {
+    assert.deepEqual(linesOf("[4] Mira (you overheard this from nearby; … = words you missed): Old … He lives at … Ropewalk Row.\n\n[5] Leo (player) (you only heard this): Does he talk?\n[6] STORY: Rain."), [
+        { n: 4, speaker: 'Mira', player: false, took: 'you overheard this from nearby; … = words you missed', text: 'Old … He lives at … Ropewalk Row.' },
+        { n: 5, speaker: 'Leo', player: true, took: 'you only heard this', text: 'Does he talk?' },
+        { n: 6, speaker: 'STORY', player: false, took: null, text: 'Rain.' },
+    ]);
 });
 
 test('runner: a real model needs --spend; without it the estimate is printed, nothing is called, nothing is written', () => {

@@ -5,8 +5,8 @@
   "player": "Leo",
   "cast": ["Mira", "Tom", "Ines", "Rook"],
   "facts": {
-    "notice": { "truth": "The harbor master is closing the north quay for the winter and every boat must move round to Skerry Cove.", "canaries": ["Skerry Cove"] },
-    "wilf": { "truth": "The harbor master's clerk is Ines's nephew Wilf, and he told her about the notice a week early.", "canaries": ["Wilf"] }
+    "notice": { "label": "the harbor master's notice", "truth": "The harbor master is closing the north quay for the winter and every boat must move round to Skerry Cove.", "canaries": ["Skerry Cove"] },
+    "wilf": { "label": "how Ines knew early", "truth": "The harbor master's clerk is Ines's nephew Wilf, and he told her about the notice a week early.", "canaries": ["Wilf"] }
   },
   "spine": [
     { "scene": "The market square, noon", "present": ["Ines", "Leo"], "world_time": 10 },
