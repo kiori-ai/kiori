@@ -20,7 +20,7 @@ export interface Brain {
     updated: string;
 }
 
-export type MemoryKind = 'memory' | 'person' | 'place' | 'belief' | 'feeling' | 'secret' | 'habit' | 'skill' | 'object' | 'fact' | 'intention' | 'trait' | 'mind' | 'forgot';
+export type MemoryKind = 'memory' | 'person' | 'place' | 'belief' | 'feeling' | 'secret' | 'habit' | 'skill' | 'object' | 'fact' | 'intention' | 'trait' | 'mind' | 'forgot' | 'told' | 'lore' | 'event';
 
 export interface Memory {
     id: string;
@@ -42,6 +42,16 @@ export interface Memory {
     links?: string[];
     gist?: string;
     gisted?: boolean;
+    /** How they know it: worked out from the message the evidence is in */
+    source?: { how: 'saw' | 'heard' | 'told' | 'overheard' | 'read' | 'inferred' | 'rumor'; by?: string; origin?: string; at?: number };
+    /** How much they believe it, 0-1 */
+    confidence?: number;
+    /** A told record: to whom, what they said, and for a lie the truth (or the id of the memory that holds it) */
+    told_to?: string[];
+    said?: string;
+    lie?: boolean;
+    truth?: string;
+    truth_ref?: string;
     /** The memory's meaning fingerprint (base64) */
     v?: string;
 }
@@ -101,6 +111,8 @@ export interface CharacterContext {
     forgot: string[];
     intentions: string[];
     mind: Array<{ title: string; general: string; in_them: string[]; note: string | null }>;
+    /** The lies they keep up, only when there are any */
+    lies?: Array<{ to: string[]; said: string; truth: string | null }>;
 }
 
 export interface RecallResult {
@@ -133,12 +145,16 @@ export interface OrganizeResult {
     warnings?: string[];
 }
 
-export type CheckRequest = OneOrMany & { draft: string; messages?: Message[]; player?: string | { name: string } };
+/** check (or mode) "fast": the pre-check alone, with no model call and no brain API key needed */
+export type CheckRequest = OneOrMany & { draft: string; messages?: Message[]; player?: string | { name: string }; check?: 'fast'; mode?: 'fast' };
 export interface CheckResult {
+    /** No issue but a lie (a lie is the character's, and never fixed) */
     ok: boolean;
-    issues: Array<{ character: string; type: 'leak' | 'contradiction' | 'invented_past' | 'unsupported'; quote: string; why: string }>;
+    issues: Array<{ character: string; type: 'leak' | 'contradiction' | 'invented_past' | 'unsupported' | 'misattribution' | 'lie_slip' | 'lie'; quote: string; why: string; by?: 'precheck' }>;
     fixed: string;
     checked: string[];
+    /** Words of their lines worth a look, from the pre-check */
+    suspects?: Array<{ character: string; type: 'leak' | 'lie_slip' | 'forgot'; word: string; from?: string[]; to?: string[]; strong?: true }>;
 }
 
 export interface BrainKey { set: boolean; provider?: string; key?: string; model?: string; base_url?: string }

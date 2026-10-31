@@ -101,6 +101,8 @@ export function contextOf(brain, { text = '', hits = [], budget = 6000, player =
     // What this conversation taught them for sure (their core facts come up as memories when relevant)
     const facts = own.filter(m => m.kind === 'fact' && m.scope === 'chat').map(m => ({ about: m.about, fact: m.body, ...(m.source && { source: m.source }), ...(m.confidence != null && { confidence: m.confidence }) }));
     const forgot = own.filter(m => m.kind === 'forgot').map(m => m.body);
+    // The lies they told, to whom and what the truth is: theirs to keep up (the people they lied to just believe them)
+    const lies = own.filter(m => m.kind === 'told' && m.lie && m.status !== 'done').map(m => ({ to: m.told_to ?? m.about, said: m.said ?? m.body, truth: m.truth ?? null }));
     const intentions = own.filter(m => m.kind === 'intention' && m.status === 'active').map(m => m.title);
     const notes = new Map(own.filter(m => m.kind === 'mind').map(m => [m.title.toLowerCase(), m.body]));
     const mind = mindFor(text, 2).map(t => {
@@ -119,6 +121,7 @@ export function contextOf(brain, { text = '', hits = [], budget = 6000, player =
     add('People in their life', closestFirst(relations, player).slice(0, 14).map(r => `- ${r.target}: ${RELATION_FIELDS.filter(f => r[f] != null).map(f => `${f} ${r[f]}`).join(', ')}${r.note ? `. ${r.note}` : ''}`).join('\n'));
     add('What they know for sure', facts.filter(sure).slice(-20).map(f => `- ${f.fact}`).join('\n'));
     add("What they've been told (they know who told them, and say so)", facts.filter(f => !sure(f)).slice(-20).map(toldLine).join('\n'));
+    add('Lies they are keeping up (toward those people they stick to the lie, unless they choose to confess)', lies.slice(-12).map(l => `- To ${l.to.join(', ')}: "${l.said}".${l.truth ? ` The truth: ${l.truth}` : ''}`).join('\n'));
     add("Their story so far, as they lived it (details not recalled below stay vague; they don't make them up)", timeline.slice(-30).map(s => `- ${s}`).join('\n'));
     add('What this moment brings to mind', hits.map(h => `### ${h.title} (${[clarity(h), !sure(h) && fromWhom(h.source)].filter(Boolean).join(', ')})\n${clarity(h) === 'faded' ? `Only the gist is left: ${h.gist ?? firstSentence(h.body)}` : h.body}`).join('\n\n'));
     add('In their mind', mind.map(m => `- ${m.title}: ${m.general}${m.in_them.length ? ` In them: ${m.in_them.join(' ')}` : ''}${m.note ? ` (${m.note})` : ''}`).join('\n'));
@@ -135,7 +138,7 @@ export function contextOf(brain, { text = '', hits = [], budget = 6000, player =
     }
     return {
         name, text: `# What ${name} brings to this moment\n\n${out}`,
-        memories: hits, relations: relations.map(({ scope, ...r }) => r), state, facts, forgot, intentions, mind,
+        memories: hits, relations: relations.map(({ scope, ...r }) => r), state, facts, forgot, intentions, mind, ...(lies.length && { lies }),
     };
 }
 

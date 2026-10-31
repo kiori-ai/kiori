@@ -23,7 +23,7 @@ export function trimSlashes(s) {
     return s.slice(0, end);
 }
 
-const STOP = new Set(('the and for are but not you your yours with this that what when where which who whom why how was were has have had '
+export const STOP = new Set(('the and for are but not you your yours with this that what when where which who whom why how was were has have had '
     + 'his her hers him she they them their theirs its our ours from into onto over under about then than there here just also very '
     + 'can could would should will shall may might must did does doing done been being out off all any some such only own same too '
     + 'one two now say said like know get got make made want went come came see saw ever never yes yeah okay well').split(' '));

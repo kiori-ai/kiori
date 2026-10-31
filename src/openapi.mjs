@@ -68,6 +68,7 @@ const schemas = {
     CharacterContext: obj({
         name: str(), text: str('A ready-to-use block for your prompt'), memories: arr(ref('Memory')), relations: arr(ref('Relation')), state: ref('State'),
         facts: arr(obj({ about: arr(str()), fact: str(), source: ref('Source'), confidence: num() })), forgot: arr(str()), intentions: arr(str()), mind: arr(obj({})),
+        lies: arr(obj({ to: arr(str()), said: str(), truth: nul(str()) }), 'The lies they keep up (only when there are any)'),
     }),
     RecallResult: obj({ characters: arr(ref('CharacterContext')), text: str('The context, when one brain was sent'), check_recommended: bool('The player brought up the past: worth checking the reply') }),
     OrganizeInput: { allOf: [ref('OneOrMany'), obj({
@@ -82,10 +83,11 @@ const schemas = {
         waiting: int('Settled messages not learned yet'), held: int(), warnings: arr(str()),
         placed: arr(obj({ id: str(), n: int('Its place in the messages sent, from 1'), present: arr(ref('Present')), scene: nul(str()) }), 'Messages Kiori placed in this call: send these back as their present, and they are never placed again'),
     }),
-    CheckInput: { allOf: [ref('OneOrMany'), obj({ draft: str('The reply to check'), messages: arr(ref('ChatMessage')), player: str() }, ['draft'])] },
+    CheckInput: { allOf: [ref('OneOrMany'), obj({ draft: str('The reply to check'), messages: arr(ref('ChatMessage')), player: str(), check: str('fast: the pre-check alone, with no model call and no key needed', { enum: ['fast'] }), mode: str('The same as check', { enum: ['fast'] }) }, ['draft'])] },
     CheckResult: obj({
-        ok: bool(), issues: arr(obj({ character: str(), type: str(null, { enum: ['leak', 'contradiction', 'invented_past', 'unsupported', 'misattribution'] }), quote: str(), why: str() })),
+        ok: bool('No issue but a lie'), issues: arr(obj({ character: str(), type: str('A lie is never fixed', { enum: ['leak', 'contradiction', 'invented_past', 'unsupported', 'misattribution', 'lie_slip', 'lie'] }), quote: str(), why: str(), by: str('precheck: found by the pre-check, in code', { enum: ['precheck'] }) })),
         fixed: str('The draft with only the problem lines changed'), checked: arr(str()),
+        suspects: arr(obj({ character: str(), type: str(null, { enum: ['leak', 'lie_slip', 'forgot'] }), word: str(), from: arr(str('A brain that holds it')), to: arr(str('Whom they lied to')), strong: bool('Made an issue') }), 'Words of their lines worth a look, from the pre-check'),
     }),
     BrainKey: obj({ set: bool(), provider: str(), key: str('Its last four characters'), model: str(), base_url: str() }),
 };
@@ -103,14 +105,14 @@ export const openapi = {
         '/v1/brains': { post: op('A new brain', { tags: ['Brains'], description: 'From a character card, or name and description. Keep what comes back; start each new conversation from a copy.', body: ref('CreateInput'), response: obj({ brain: ref('Brain') }) }) },
         '/v1/brains/recall': { post: op('What each character knows right now', { tags: ['Brains'], description: 'Search over each brain for this moment, as a ready-to-use prompt block. The brains are only read.', body: ref('RecallInput'), response: ref('RecallResult') }) },
         '/v1/brains/organize': { post: op('The brains learn from the chat', { tags: ['Brains'], description: 'Send the brains and the recent messages as they are now. What\'s new and settled is learned (each brain only from the scenes it was in); an edited, rerolled or deleted message that was learned is unlearned. Keep the brains that come back.', body: ref('OrganizeInput'), response: ref('OrganizeResult') }) },
-        '/v1/brains/check': { post: op('Check a draft reply before it is shown', { tags: ['Brains'], description: 'Leaks, contradictions and invented pasts, flagged and fixed with minimal edits.', body: ref('CheckInput'), response: ref('CheckResult') }) },
+        '/v1/brains/check': { post: op('Check a draft reply before it is shown', { tags: ['Brains'], description: 'Leaks, contradictions, invented pasts, misattributions and lie slips, flagged and fixed with minimal edits; a lie kept up on purpose is flagged and left. The free pre-check runs first; check: fast is the pre-check alone.', body: ref('CheckInput'), response: ref('CheckResult') }) },
         '/v1/brains/export': { post: { ...op('A brain as an Obsidian vault', { tags: ['Brains'], body: obj({ brain: ref('Brain') }, ['brain']) }), responses: { 200: { description: 'A zip', content: { 'application/zip': {} } }, ...errors } } },
         '/v1/chat/completions': {
             post: op('The drop-in: an OpenAI-compatible chat call with the brains', {
                 tags: ['Drop-in'],
-                description: 'Your usual chat completion request, plus "kiori": { "brain": ... } (or "brains"). Each character\'s mind goes into the system prompt and the request goes on to your model: the model you name, at your brain API key\'s provider. For another provider, send X-Kiori-Upstream-Url with X-Kiori-Upstream-Key (an address without a key is refused: the key Kiori keeps only goes to its own provider). Streaming works. With check (auto by default: when the player brings up the past) the reply is checked and fixed before it is sent; the X-Kiori-Check header says how it went. Nothing is kept: call /v1/brains/organize to let the brains learn.',
+                description: 'Your usual chat completion request, plus "kiori": { "brain": ... } (or "brains"). Each character\'s mind goes into the system prompt and the request goes on to your model: the model you name, at your brain API key\'s provider. For another provider, send X-Kiori-Upstream-Url with X-Kiori-Upstream-Key (an address without a key is refused: the key Kiori keeps only goes to its own provider). Streaming works. With check the reply is checked and fixed before it is sent: auto (the default) runs the free pre-check and calls the auditor when it has suspects or the player brings up the past; true always calls it; fast is the pre-check alone. The X-Kiori-Check header says how it went. Nothing is kept: call /v1/brains/organize to let the brains learn.',
                 params: [], query: UPSTREAM,
-                body: obj({ model: str(), messages: arr(ref('ChatMessage')), stream: bool(), kiori: { allOf: [ref('OneOrMany'), obj({ player: str(), check: str(null, { enum: ['auto', 'true', 'false'] }), budget: int() })] } }, ['messages', 'kiori']),
+                body: obj({ model: str(), messages: arr(ref('ChatMessage')), stream: bool(), kiori: { allOf: [ref('OneOrMany'), obj({ player: str(), check: str(null, { enum: ['auto', 'true', 'fast', 'false'] }), budget: int() })] } }, ['messages', 'kiori']),
             }),
         },
         '/v1/models': { get: op('Your provider\'s models, passed on', { tags: ['Drop-in'], query: UPSTREAM }) },

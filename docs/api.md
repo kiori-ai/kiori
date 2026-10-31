@@ -43,7 +43,7 @@ What each character knows right now, for your prompt.
 | `budget` | Characters of text per brain (6000 by default, 200 to 60000). |
 | `limit` | Memories per brain (10 by default, at most 50). |
 
-Answer: `{ "text", "characters": [{ "name", "text", "memories", "relations", "state", "facts", "forgot", "intentions", "mind" }], "check_recommended" }`. With one brain, `text` is the block for your prompt. The brains are only read. Memories and facts learned in a conversation carry `source` (`{ "how", "by", "origin", "at" }`: how they know it, from whom, whom the teller said it came from, and the message) and `confidence` (0 to 1); `text` lists what they were told apart from what they know for sure.
+Answer: `{ "text", "characters": [{ "name", "text", "memories", "relations", "state", "facts", "forgot", "intentions", "mind", "lies" }], "check_recommended" }`. `lies` (only when there are any) are the lies a character keeps up: `{ "to", "said", "truth" }`. With one brain, `text` is the block for your prompt. The brains are only read. Memories and facts learned in a conversation carry `source` (`{ "how", "by", "origin", "at" }`: how they know it, from whom, whom the teller said it came from, and the message) and `confidence` (0 to 1); `text` lists what they were told apart from what they know for sure.
 
 ### POST /v1/brains/organize
 
@@ -87,7 +87,9 @@ A draft reply, checked and fixed before it's shown.
 { "brains": [{ ... }, { ... }], "messages": [ ... ], "draft": "Rook: I know about the letter." }
 ```
 
-Answer: `{ "ok": false, "issues": [{ "character": "Rook", "type": "leak", "quote": "the letter", "why": "..." }], "fixed": "Rook: I know about something.", "checked": ["Rook"] }`. Issue types are `leak`, `contradiction`, `invented_past`, `unsupported` and `misattribution` (naming a source the character's brain doesn't give, or speaking as an eyewitness of something they were only told). When nothing is wrong, `fixed` is the draft itself. With one brain, that character is checked; in a group, whoever speaks in the draft (`Name: words` lines) or is named in it.
+Answer: `{ "ok": false, "issues": [{ "character": "Rook", "type": "leak", "quote": "the letter", "why": "..." }], "fixed": "Rook: I know about something.", "checked": ["Rook"], "suspects": [{ "character": "Rook", "type": "leak", "word": "letter", "from": ["Mira"] }] }`. Issue types are `leak`, `contradiction`, `invented_past`, `unsupported`, `misattribution` (naming a source the character's brain doesn't give, or speaking as an eyewitness of something they were only told), `lie_slip` (toward someone they lied to, they contradict their own lie without owning up) and `lie` (contradicting their memories to protect a secret of theirs or to keep up a lie already told). A `lie` is the character lying, not a fault: it is never fixed, and `ok` stays true when it is the only issue. When nothing is wrong, `fixed` is the draft itself. With one brain, that character is checked; in a group, whoever speaks in the draft (`Name: words` lines) or is named in it.
+
+The [pre-check](concepts.md#the-pre-check) runs first, in code. An issue it found itself has `"by": "precheck"`: a name or a number in a character's line that only other brains hold. `suspects` lists the words worth a look, each with `type` `leak` (and `from`, the brains that hold it, empty for a recent message they missed; `strong: true` when it became an issue), `lie_slip` (with `to`, whom they lied to) or `forgot`; the auditor judges them. With `"check": "fast"` (or `"mode": "fast"`) the answer is the pre-check alone: no model call, no brain API key needed, and `fixed` is the draft.
 
 ### POST /v1/brains/export
 
@@ -99,7 +101,7 @@ Answer: `{ "ok": false, "issues": [{ "character": "Rook", "type": "leak", "quote
 
 An OpenAI-compatible chat completion, with `"kiori": { "brain": ... }` (or `"brains"`) in the body. Each character's mind is added to the system prompt (yours stays first), and the request goes on to your model: the `model` you name, at your brain API key's provider. Streaming works.
 
-In `kiori`: `player`, `check` (`auto` by default, `true` or `false`) and `budget`. The `X-Kiori-Check` header on the answer says `ok`, `fixed`, `skipped` (no brain API key to check with, or no text to check, such as a tool call) or `failed`. A held reply still streams to a streaming client, tool calls and usage included. Nothing is kept.
+In `kiori`: `player`, `check` (`auto` by default, `true`, `fast` or `false`) and `budget`. `auto` holds the reply when the pre-check can find something in it (a group chat, a character keeping up a lie) or the player brings up the past; it runs the pre-check, and calls the auditor when the pre-check has suspects or the past came up. A reply it finds nothing in goes out as it came, with no header. `true` always calls the auditor; `fast` runs the pre-check alone and never changes the reply. The `X-Kiori-Check` header on the answer says `ok`, `fixed`, `flagged` (an issue was found and the reply goes out as it was, as with `fast`), `skipped` (no brain API key to check with, or no text to check, such as a tool call) or `failed`. A held reply still streams to a streaming client, tool calls and usage included, but only once it is checked: in a group chat, `auto` holds every reply. Nothing is kept.
 
 Your provider's errors come back as they came, except a key it refuses or one out of credits: those are `402 BAD_KEY` and `402 CREDITS`, as everywhere else in the API, so a 401 always means the Kiori key.
 

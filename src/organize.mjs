@@ -10,7 +10,7 @@
 // comes from, or it is not written.
 import { config } from './config.mjs';
 import { askJSON, requireModelKey } from './llm.mjs';
-import { evidenceFound, norm, textOf, num, tokens, whoIs, sameCharacter, samePerson, mentions, bareName } from './text.mjs';
+import { evidenceFound, norm, textOf, num, tokens, whoIs, sameCharacter, samePerson, mentions, bareName, firstSentence } from './text.mjs';
 import { fingerprint, characterOf, addMemories, setRelation, setState, getRelations, getState, closestFirst, mergeCard, touch, answerWith, RELATION_FIELDS, LIMITS } from './brainfile.mjs';
 import { placeEvents, modeOf, perceived, presentOf, placementChunks, eventLine, speakersIn, MODES } from './scenes.mjs';
 import { searchMemories, queryVector, vectorFor, playerName, embedMissing } from './recall.mjs';
@@ -57,8 +57,8 @@ const SCHEMA = {
         },
         finished: { type: 'array', items: { type: 'string' }, description: 'Titles of their existing plans that were done or dropped here' },
         told: {
-            type: 'array', description: 'Only when THEY passed on to someone there what someone else said, or a secret: whom they told and what they said',
-            items: { type: 'object', properties: { to: { type: 'array', items: { type: 'string' } }, said: { type: 'string' }, lie: { type: 'boolean', description: 'Only if they knew it was false' }, truth: { type: 'string', description: 'For a lie: the exact words from the scenes that show the truth' }, evidence: quoted }, required: ['to', 'said', 'lie', 'evidence'] },
+            type: 'array', description: 'Only when THEY passed on to someone there what someone else said, a secret, or a lie: whom they told and what they said',
+            items: { type: 'object', properties: { to: { type: 'array', items: { type: 'string' } }, said: { type: 'string' }, lie: { type: 'boolean', description: 'Only if they knew it was false' }, truth: { type: 'string', description: 'For a lie: the exact words from the scenes that show the truth, or the truth in one sentence when truth_ref gives the memory that holds it' }, truth_ref: { type: 'string', description: 'For a lie: the [id] of the memory below that holds the truth; else ""' }, evidence: quoted }, required: ['to', 'said', 'lie', 'evidence'] },
         },
         forgot: {
             type: 'array', description: 'Only if something made THEM forget (a memory wipe, amnesia, a spell): exactly what is gone',
@@ -72,6 +72,7 @@ const SCHEMA = {
     required: ['memories', 'facts', 'relations', 'state', 'intentions', 'finished', 'forgot', 'card'],
 };
 
+const KNOWN_AS = { secret: '(their secret) ', told: '(what they told) ' };
 function prompt({ c, player, events, known, relations, state, plans, forgot }) {
     const card = c.card ?? {};
     const hasCard = Boolean(card.who || card.personality || card.description);
@@ -85,6 +86,8 @@ How memory works here:
 - Their personality and how much they care about the people involved decide what matters: a small thing from someone they love becomes an anchor, a gesture from someone they dislike stays faint.
 - Keep the concrete details that will matter later: where, who, what exactly, the order of events, names, numbers, promises, what was given. Use every name exactly as the story gives it; never mix two people's names.
 - ${player} is the player's character. ${c.name} knows about them only what these scenes show.
+- If ${c.name} themself said something that their memories or these scenes show they know is false, it's a lie: add it to told with lie: true, who they said it to, and the truth (quote where the truth shows, or the id of the memory that holds it). A mistake isn't a lie: only when they knew.
+- When something they believed is shown false in front of them, write what they now know, and in the body that they were lied to and by whom. What they believed before stays a memory: people remember the lie too.
 - Every memory, fact, plan and forgetting must quote the exact words from the scenes it comes from (copy them verbatim). Without a real quote it will be discarded.
 - Write everything in English.
 
@@ -101,13 +104,15 @@ THEIR STATE BEFORE: ${[state.mood, state.on_mind.join('; ')].filter(Boolean).joi
 THEIR OPEN PLANS: ${plans.join('; ') || '(none)'}
 ${forgot.length ? `THEY WERE MADE TO FORGET (nothing may show they still know it): ${forgot.join('; ')}\n` : ''}
 WHAT THEY ALREADY REMEMBER THAT THIS TOUCHES (don't write these again; build on them):
-${known.map(m => `- ${m.title}: ${m.body.slice(0, 220)}`).join('\n') || '(nothing yet)'}
+${known.map(m => `- [${m.id}] ${KNOWN_AS[m.kind] ?? ''}${m.title}: ${m.body.slice(0, 220)}${m.lie && m.truth ? ` (the truth: ${m.truth.slice(0, 200)})` : ''}`).join('\n') || '(nothing yet)'}
 
 THE SCENES ${c.name.toUpperCase()} WAS IN:
 ${events.map(e => eventLine(e)).join('\n\n')}`;
 }
 
 const bad = message => Object.assign(new Error(message), { status: 400, code: 'BAD_REQUEST' });
+// A memory id as a model writes it back: "m_abc" or "[m_abc]"
+const bareRef = r => String(r ?? '').trim().replace(/^\[(.*)\]$/, '$1').trim();
 const FINAL = ['CREDITS', 'NO_KEY', 'NEEDS_KEY', 'BAD_KEY'];
 const ROLE = { user: 'player', human: 'player', player: 'player', assistant: 'narrator', ai: 'narrator', bot: 'narrator', model: 'narrator', narrator: 'narrator', character: 'character' };
 export const MAX_MESSAGES = 400;
@@ -268,9 +273,22 @@ function provenance(item, e, { self, scope, trust }) {
     return { source, confidence: Math.round(confidence * 100) / 100 };
 }
 
+// What they already remember that a stretch touches: the best search hits, and always their secrets whose keys come up
+// in it and what they told about its topic (a lie above all), so the organizer can tell a lie from a mistake. A few
+// of each at most: the prompt stays the size it was, give or take.
+function knownFor(brain, text, qv) {
+    const hits = searchMemories(brain, text, qv, { limit: 10 });
+    const words = new Set(tokens(text)), has = new Set(hits.map(m => m.id));
+    const touches = list => list.some(w => words.has(w));
+    const more = kind => brain.memories.filter(m => m.kind === kind && m.status !== 'done' && !has.has(m.id)
+        && touches(kind === 'secret' ? m.keys.flatMap(tokens) : tokens(`${m.said ?? ''} ${m.truth ?? ''}`).filter(w => w.length >= 4)));
+    const told = more('told').sort((a, b) => Number(!!b.lie) - Number(!!a.lie));
+    return [...hits, ...more('secret').slice(0, 5), ...told.slice(0, 5)];
+}
+
 async function learnBatch(project, brain, batch, player, scope) {
     const text = batch.map(e => e.text).join('\n');
-    const known = searchMemories(brain, text, vectorFor(project, brain, await queryVector(project, [brain], text)), { limit: 10 });
+    const known = knownFor(brain, text, vectorFor(project, brain, await queryVector(project, [brain], text)));
     const plans = brain.memories.filter(m => m.kind === 'intention' && m.status === 'active').map(m => m.title);
     const forgot = brain.memories.filter(m => m.kind === 'forgot').map(m => m.body);
     const r = await askJSON({
@@ -294,8 +312,8 @@ async function learnBatch(project, brain, batch, player, scope) {
     const memories = sourced(r.memories, 'memories').map(({ x, source, confidence }) => ({ ...x, kind: 'memory', ...span, source, confidence }));
     const facts = sourced(r.facts, 'facts').map(({ x: f, source, confidence }) => ({ kind: 'fact', title: f.fact.slice(0, 120), body: f.fact, about: [f.about], importance: 0.7, emotion: 0.2, ...span, evidence: f.evidence, source, confidence }));
     // What they passed on: only from their own line, and only to people who were there to hear it (in full, or on the
-    // phone: not through a wall, not only seeing it, not asleep). A lie needs the truth quoted from the scenes, or it is
-    // kept as a plain record of what they said
+    // phone: not through a wall, not only seeing it, not asleep). A lie needs its truth: quoted from the scenes, or the
+    // id of a memory of theirs that holds it; without either it is kept as a plain record of what they said
     const there = (e, name) => {
         const c = whoIs(name, scope), n = c ? null : (e.present ?? []).find(x => samePerson(bareName(x), name));
         const mode = c ? modeOf(e, c, scope) : n == null ? null : e.modes?.[norm(n)] ?? 'full';
@@ -304,8 +322,13 @@ async function learnBatch(project, brain, batch, player, scope) {
     const told = r.told.flatMap(t => {
         const e = proven(t.evidence) && locate(t.evidence, batch, scenes), to = [...new Set(t.to.map(bareName).filter(Boolean))].slice(0, 12), said = t.said.trim() || t.evidence;
         if (!e || !to.length || !sameCharacter(whoIs(saidBy(e, t.evidence) ?? '', scope), self) || to.some(n => samePerson(n, self.name) || !there(e, n))) return (dropped.told++, []);
-        const lie = t.lie === true && proven(t.truth);
-        return [{ kind: 'told', title: `Told ${to.join(', ')}: ${said}`.slice(0, 120), body: `I told ${to.join(', ')}: "${said}"`, about: to, told_to: to, said, lie, ...(lie && { truth: t.truth }), importance: 0.5, emotion: 0.2, evidence: t.evidence, ...span, source: { how: 'saw', at: e.seq } }];
+        const ref = t.lie === true ? brain.memories.find(m => m.id === bareRef(t.truth_ref) && m.kind !== 'told') : null;
+        const lie = t.lie === true && (proven(t.truth) || !!ref);
+        const truth = lie ? String(t.truth ?? '').trim() || firstSentence(ref.body) : null;
+        return [{
+            kind: 'told', title: `${lie ? 'Lied to' : 'Told'} ${to.join(', ')}: ${said}`.slice(0, 120), body: `I told ${to.join(', ')}: "${said}"${lie ? `. It was a lie: ${truth}` : ''}`,
+            about: to, told_to: to, said, lie, ...(lie && { truth, ...(ref && { truth_ref: ref.id }) }), importance: lie ? 0.7 : 0.5, emotion: 0.2, evidence: t.evidence, ...span, source: { how: 'saw', at: e.seq },
+        }];
     });
     const intentions = keep(r.intentions, 'intentions').map(i => ({ kind: 'intention', title: i.title, body: i.body, importance: i.importance, ...span, evidence: i.evidence }));
     const forgets = keep(r.forgot, 'forgot').map(f => ({ kind: 'forgot', title: `Forgot: ${f.what}`.slice(0, 120), body: f.what, importance: 1, strength: 1, ...span, evidence: f.evidence }));

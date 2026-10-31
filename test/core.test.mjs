@@ -69,9 +69,12 @@ function answer(prompt) {
         // A line that passes something on ("says", "said", "told me", a "rumor") is a fact. The fake claims it saw it,
         // whoever spoke; names whom it came from ("Mira says": Mira; a rumor: Rook, named in the line or not); and is
         // sure of it unless the line says "maybe". A line that opens on a name ("Ines, Mira says...") is also a told
-        // record, to that name, whoever spoke it
-        const passed = scenes.filter(s => /\b(says|said|told me|rumor)\b/.test(s.text));
+        // record, to that name, whoever spoke it. A line with "[lies]" is a lie: its truth is quoted from a "[truth]" line
+        // when the scenes have one (else words nobody said); with "[lies:secret]" the truth is the first secret it was shown
+        const passed = scenes.filter(s => /\b(says|said|told me|rumor)\b|\[lies/.test(s.text));
         const cite = s => words(s.text).slice(0, 10).join(' ');
+        const truthLine = scenes.find(s => s.text.includes('[truth]')), secret = prompt.match(/^- \[(m_[\w-]+)\] \(their secret\)/m)?.[1];
+        const lie = s => (/\[lies/.test(s.text) ? { lie: true, truth: s.text.includes('[lies:secret]') ? '' : truthLine ? cite(truthLine) : 'words nobody ever said in these scenes at all', truth_ref: s.text.includes('[lies:secret]') ? `[${secret}]` : '' } : { lie: false, truth: '' });
         return {
             memories: [
                 { title: `${memory[1]} remembers ${scenes[0].text.slice(0, 30)}`, body: `I remember: ${scenes.map(s => s.text).join(' ')}`, keys: words(scenes[0].text).slice(0, 3), about: ['Leo'], importance: 0.7, emotion: 0.5, evidence: quote },
@@ -79,7 +82,7 @@ function answer(prompt) {
                 ...(filledIn && prompt.includes('words you missed') ? [{ title: 'Filled in', body: 'I know it all.', keys: [], about: [], importance: 0.5, emotion: 0.1, evidence: filledIn }] : []),
             ],
             facts: passed.map(s => ({ about: 'Leo', fact: s.text, evidence: cite(s), how: 'saw', via: s.text.match(/\b([A-Z][a-z]+) (?:says|said)\b/)?.[1] ?? (/rumor/.test(s.text) ? 'Rook' : ''), confidence: /\bmaybe\b/.test(s.text) ? 0.2 : 1 })),
-            told: passed.filter(s => /^[A-Z][a-z]+,/.test(s.text)).map(s => ({ to: [s.text.match(/^([A-Z][a-z]+),/)[1]], said: s.text, lie: false, truth: '', evidence: cite(s) })),
+            told: passed.filter(s => /^[A-Z][a-z]+,/.test(s.text)).map(s => ({ to: [s.text.match(/^([A-Z][a-z]+),/)[1]], said: s.text, ...lie(s), evidence: cite(s) })),
             intentions: [], finished: [], forgot: [],
             relations: [{ target: 'Leo', trust: 60, closeness: 40, respect: 50, resentment: 0, attraction: 0, note: 'A stranger who stayed.' }, { target: memory[1], trust: 99, closeness: 99, respect: 99, resentment: 0, attraction: 0, note: 'myself' }],
             state: { mood: 'curious', on_mind: ['the stranger'], wants: [] },
@@ -108,6 +111,11 @@ function answer(prompt) {
     }
     if (/You check a draft reply/.test(prompt)) {
         const draft = prompt.slice(prompt.lastIndexOf('DRAFT:') + 6).split('\n\nReturn only JSON')[0].trim();
+        // A lie slip the pre-check pointed at; a lie that keeps a secret (which the fake "fixes" anyway, to show the fix
+        // is not taken); a name the pre-check says only others know
+        if (/Tom's lines: words of the truth behind a lie they keep up toward Ines/.test(prompt)) return { issues: [{ character: 'Tom', type: 'lie_slip', quote: 'the crates are under the chapel', why: 'He told Ines he was home asleep.' }], fixed: draft.replace('the crates are under the chapel', 'I was home') };
+        if (/Mira: .*never written a letter/.test(draft) && /The unsent letter/.test(prompt)) return { issues: [{ character: 'Mira', type: 'lie', quote: 'never written a letter', why: 'She keeps her secret.' }], fixed: draft.replace('never', 'once') };
+        if (/Rook's lines: words only others know[^\n]*"Marisol"/.test(prompt)) return { issues: [{ character: 'Rook', type: 'leak', quote: 'the Marisol', why: 'Only Mira knows of it.' }], fixed: draft.replace('Marisol', 'ship') };
         if (/Ines: .*Mira told me/.test(draft) && /### Ines[\s\S]*Tom (told them|said it in front of them)/.test(prompt)) return { issues: [{ character: 'Ines', type: 'misattribution', quote: 'Mira told me', why: 'Tom told her, not Mira.' }], fixed: draft.replace('Mira told me', 'Tom told me') };
         return /Rook: .*letter/.test(draft) && prompt.includes('### Rook')
             ? { issues: [{ character: 'Rook', type: 'leak', quote: 'the letter', why: 'He was never told about it.' }], fixed: draft.replace('the letter', 'something') }
@@ -136,6 +144,7 @@ function fakeProvider() {
         // One that answers with a web page; one that answers with a tool call and no text
         if (body.model === 'html-page') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<script>alert(1)</script>'); }
         if (body.model === 'long-reply') return send(200, { id: 'chatcmpl-long', object: 'chat.completion', model: body.model, choices: [{ index: 0, message: { role: 'assistant', content: `Mira: ${'the lamp burns all night '.repeat(1200)}` }, finish_reason: 'stop' }] });
+        if (body.model === 'group-reply') return send(200, { id: 'chatcmpl-group', object: 'chat.completion', model: body.model, choices: [{ index: 0, message: { role: 'assistant', content: 'Rook: So the Marisol went down, eh?' }, finish_reason: 'stop' }] });
         if (body.model === 'huge-error') return send(400, { error: { message: `Nope: sk-${'a'.repeat(2e6)}` } });
         if (body.model === 'tool-call') return send(200, { id: 'chatcmpl-tool', object: 'chat.completion', model: body.model, choices: [{ index: 0, message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'roll', arguments: '{"dice":"d20"}' } }] }, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 20, completion_tokens: 5 } });
         if (req.url === '/models') return send(200, { data: [{ id: 'anthropic/claude-haiku-5.5', name: 'Claude Haiku 5.5' }, { id: 'anthropic/claude-sonnet-5.5', name: 'Claude Sonnet 5.5' }, { id: 'openai/text-embedding-3-small' }, { id: 'meta/llama-roleplay' }] });
@@ -990,6 +999,149 @@ test('organize: placed carries modes, and sent back they hold with no placement 
     const old = eventsOf([{ role: 'assistant', name: 'Mira', content: 'The tide is high.' }, { role: 'user', content: 'So it is.' }], { player: 'Leo' });
     await placeEvents(P, old, { characters: [person('Mira')], player: 'Leo' });
     assert.deepEqual(old.map(e => [e.present, e.modes]), [[['Mira', 'Leo'], {}], [['Leo'], {}]]);
+});
+
+// ---------- Lies, and the data-first pre-check ----------
+// Tom hides the crates at midnight with only Leo there, then tells Ines at the tavern he was home asleep
+const NIGHT = [
+    { id: 'l1', role: 'narrator', content: '*Midnight. Tom rows the stolen crates to the chapel and hides them under the floor. [truth]*', present: ['Tom', 'Leo'] },
+    { id: 'l2', role: 'narrator', content: '*Morning at the tavern. Ines is waiting for Tom by the fire.*', present: ['Tom', 'Ines', 'Leo'] },
+    { id: 'l3', role: 'assistant', name: 'Tom', content: 'Ines, I was home asleep all night long, ask anyone. [lies]', present: ['Tom', 'Ines', 'Leo'] },
+];
+const lastAudit = () => fake.calls.findLast(c => JSON.stringify(c.body).includes('You check a draft reply')).body.messages[0].content;
+
+test('lies: the liar keeps the truth and a told record; the listener believes the lie, from the liar; editing the line takes back both', async () => {
+    let [tom, ines] = await lightBrains('Tom', 'Ines');
+    const r = await organize(P, [tom, ines], false, { messages: NIGHT, player: 'Leo', now: true, hold: 0 });
+    [tom, ines] = r.brains;
+    assert.match(chatCalls('You are the memory of Tom').at(-1).body.messages[0].content, /it's a lie: add it to told with lie: true[\s\S]*that they were lied to and by whom/);
+    const told = tom.memories.find(m => m.kind === 'told');
+    assert.deepEqual([told.told_to, told.lie, told.said, told.truth, told.truth_ref], [['Ines'], true, NIGHT[2].content, 'midnight tom rows the stolen crates the chapel and hides', undefined]);
+    assert.match(told.body, /It was a lie: midnight tom rows/);
+    // Ines believes it, as Tom's word, and nothing of the night reaches her
+    const belief = ines.memories.find(m => m.kind === 'fact');
+    assert.deepEqual([belief.body, belief.source], [NIGHT[2].content, { how: 'heard', by: 'Tom', at: 3 }]);
+    assert.doesNotMatch(JSON.stringify(ines.memories), /crates|chapel/);
+    assert.ok(!ines.memories.some(m => m.kind === 'told' || m.lie != null));
+    // Recall: the liar knows the lies he keeps up; the listener has nothing special
+    const mind = contextOf(tom, { player: 'Leo' });
+    assert.match(mind.text, /## Lies they are keeping up \(toward those people they stick to the lie, unless they choose to confess\)\n- To Ines: "Ines, I was home asleep all night long, ask anyone\. \[lies\]"\. The truth: midnight tom rows the stolen crates/);
+    assert.deepEqual(mind.lies, [{ to: ['Ines'], said: NIGHT[2].content, truth: told.truth }]);
+    const hers = contextOf(ines, { player: 'Leo' });
+    assert.doesNotMatch(hers.text, /Lies they are keeping up/);
+    assert.equal(hers.lies, undefined);
+    // The line with the lie edited: the record and the belief both go back
+    const edited = NIGHT.map(m => (m.id === 'l3' ? { ...m, content: 'Ines, the fire here is too warm tonight.' } : m));
+    const back = await organize(P, [tom, ines], false, { messages: edited, player: 'Leo', now: true, hold: 0 });
+    assert.deepEqual(back.rewound.map(x => x.name), ['Tom', 'Ines']);
+    assert.ok(!back.brains[0].memories.some(m => m.kind === 'told'));
+    assert.ok(!back.brains[1].memories.some(m => m.kind === 'fact'));
+});
+
+test('lies: the organizer sees memory ids and the secrets a stretch touches; a lie about a secret points at it, and a lie with no provable truth is a plain told record', async () => {
+    let [tom, ines, rook] = await lightBrains('Tom', 'Ines', 'Rook');
+    // Twelve memories that fit the stretch better than the secret does: search alone would leave the secret out
+    addMemories(tom, Array.from({ length: 12 }, (_, i) => ({ title: `Night ${i}`, body: 'Ines asked about the night; I was home asleep all night long, ask anyone at the tavern.', keys: ['night', 'asleep', 'home', 'ines'], about: ['Ines'] })));
+    const [secret] = addMemories(tom, [{ kind: 'secret', title: 'The crates', body: 'I hid the stolen crates under the chapel floor. Nobody may know.', keys: ['chapel'], about: [], importance: 0.9 }]);
+    const messages = [{ id: 's1', role: 'assistant', name: 'Tom', content: 'Ines, I was home asleep all night long, nowhere near the chapel. [lies:secret]', present: ['Tom', 'Ines', 'Leo'] }];
+    [tom] = (await organize(P, [tom, ines], false, { messages, player: 'Leo', now: true, hold: 0 })).brains;
+    const known = chatCalls('You are the memory of Tom').at(-1).body.messages[0].content.split('THAT THIS TOUCHES')[1].split('THE SCENES')[0];
+    assert.equal(known.match(/^- \[m_[\w-]+\] /gm).length, 11, 'the ten best hits, and the secret besides');
+    assert.match(known, new RegExp(`^- \\[${secret.id}\\] \\(their secret\\) The crates: I hid the stolen crates`, 'm'));
+    const told = tom.memories.find(m => m.kind === 'told');
+    assert.deepEqual([told.lie, told.truth_ref, told.truth], [true, secret.id, 'I hid the stolen crates under the chapel floor.']);
+    // Rook's lie has no truth anywhere: it stays what he said, a plain record
+    const lone = [{ id: 's2', role: 'assistant', name: 'Rook', content: 'Ines, I said I saw nothing on the docks last night. [lies]', present: ['Rook', 'Ines', 'Leo'] }];
+    [rook] = (await organize(P, [rook, ines], false, { messages: lone, player: 'Leo', now: true, hold: 0 })).brains;
+    const plain = rook.memories.find(m => m.kind === 'told');
+    assert.deepEqual([plain.told_to, plain.lie, plain.truth, plain.truth_ref], [['Ines'], false, undefined, undefined]);
+    assert.doesNotMatch(contextOf(rook).text, /Lies they are keeping up/);
+});
+
+test('check: a liar who contradicts the lie toward that listener is a lie_slip; toward someone else, nothing', async () => {
+    let [tom, ines, rook] = await lightBrains('Tom', 'Ines', 'Rook');
+    [tom, ines] = (await organize(P, [tom, ines], false, { messages: NIGHT, player: 'Leo', now: true, hold: 0 })).brains;
+    const draft = 'Tom: Fine, the crates are under the chapel.';
+    const slip = await checkReply(P, [tom, ines], { draft, player: 'Leo', messages: [...NIGHT, { role: 'user', content: 'Tom, where were you really?', present: ['Tom', 'Ines', 'Leo'] }] });
+    assert.deepEqual([slip.ok, slip.issues.map(i => [i.character, i.type]), slip.fixed], [false, [['Tom', 'lie_slip']], 'Tom: Fine, I was home.']);
+    assert.deepEqual(slip.suspects.map(s => [s.type, s.word, s.to]), [['lie_slip', 'crates', ['Ines']], ['lie_slip', 'chapel', ['Ines']]]);
+    const prompt = lastAudit();
+    assert.match(prompt, /### Tom[\s\S]*## Lies they are keeping up[^\n]*\n- To Ines: "Ines, I was home asleep[^\n]*The truth: midnight tom rows/);
+    assert.match(prompt, /- lie_slip: toward someone they lied to[\s\S]*Owning up \("I lied to you…"\) is not an issue/);
+    // The same words on the docks, with Ines nowhere near: nothing to flag
+    const other = await checkReply(P, [tom, rook], { draft, player: 'Leo', messages: [{ role: 'narrator', content: '*Later, on the docks, Rook mends a net beside Tom.*', present: ['Tom', 'Rook', 'Leo'] }] });
+    assert.deepEqual([other.ok, other.issues, other.suspects, other.fixed], [true, [], [], draft]);
+});
+
+test('check: a contradiction that protects a secret is a lie, kept as it is', async () => {
+    const draft = 'Mira: I have never written a letter in my life.';
+    const c = await checkReply(P, [mira], { draft, player: 'Leo', messages: [{ role: 'user', content: 'Did you ever write to your brother?' }] });
+    assert.deepEqual([c.ok, c.fixed, c.issues.map(i => i.type)], [true, draft, ['lie']]);
+    assert.match(lastAudit(), /- lie: they say something that contradicts their memories in order to protect one of their secrets[^\n]*leave it word for word in "fixed"/);
+});
+
+// Mira alone knows of the Marisol, from this chat; Rook is a sailor who never heard of it
+async function harbor(description = 'A sailor who rows the harbor.') {
+    const keeper = structuredClone(mira);
+    addMemories(keeper, [{ title: 'The Marisol', body: 'The Marisol sank off the point in the storm; only I kept its logbook.', keys: ['marisol'], about: [] }], { scope: 'chat' });
+    return { keeper, rook: await createBrain(P, { name: 'Rook', description, depth: 'light' }) };
+}
+const MARISOL = 'Rook: So the Marisol went down, eh? And the logbook with it.';
+
+test('check fast: a rare name only another brain knows is a leak, with no model call and no key; words from the card or a message the speaker saw are never suspects', async () => {
+    const { keeper, rook } = await harbor();
+    const none = createProject('No key yet', {}, { llmMode: 'own' }).project.id;
+    const calls = fake.calls.length;
+    const c = await checkReply(none, [keeper, rook], { draft: MARISOL, player: 'Leo', check: 'fast' });
+    assert.equal(fake.calls.length, calls, 'no model call');
+    assert.deepEqual(c.issues, [{ character: 'Rook', type: 'leak', quote: 'Marisol', why: 'Only Mira Voss holds "Marisol"; nothing Rook took in does.', by: 'precheck' }]);
+    assert.deepEqual([c.ok, c.fixed, c.checked], [false, MARISOL, ['Rook']]);
+    assert.deepEqual(c.suspects.map(s => [s.word, s.from, !!s.strong]), [['Marisol', ['Mira Voss'], true], ['logbook', ['Mira Voss'], false]]);
+    assert.equal((await checkReply(none, [keeper, rook], { draft: MARISOL, player: 'Leo', mode: 'fast' })).issues.length, 1, 'mode: "fast" too');
+    await assert.rejects(checkReply(none, [keeper, rook], { draft: MARISOL, player: 'Leo' }), e => e.code === 'NEEDS_KEY');
+    // Rook once crewed the Marisol (his card says so), and he was there when Mira named the logbook; the cellar was
+    // named where he wasn't, and only a message holds it: a hint, never a leak
+    const crew = (await harbor('A sailor who once crewed the Marisol.')).rook;
+    const messages = [
+        { role: 'assistant', name: 'Mira Voss', content: 'I keep the logbook by the lamp.', present: ['Mira Voss', 'Rook', 'Leo'] },
+        { role: 'assistant', name: 'Mira Voss', content: 'The key hides in the cellar, Leo.', present: ['Mira Voss', 'Leo'] },
+    ];
+    const seen = await checkReply(none, [keeper, crew], { draft: 'Rook: So the Marisol went down, eh? And the logbook. And the cellar.', player: 'Leo', check: 'fast', messages });
+    assert.deepEqual([seen.ok, seen.suspects.map(s => [s.word, s.from, !!s.strong])], [true, [['cellar', [], false]]]);
+    assert.equal(fake.calls.length, calls);
+});
+
+test('check: the auditor\'s prompt lists the pre-check\'s suspects, and a leak both of them find is one issue', async () => {
+    const { keeper, rook } = await harbor();
+    const c = await checkReply(P, [keeper, rook], { draft: MARISOL, player: 'Leo' });
+    assert.match(lastAudit(), /\nWHAT THE DATA ALREADY SHOWS [^\n]*\n- Rook's lines: words only others know \(or a message Rook wasn't there for\): "Marisol" \(Mira Voss\), "logbook" \(Mira Voss\)\n\nDRAFT:/);
+    assert.deepEqual(c.issues.map(i => [i.type, i.quote, i.by]), [['leak', 'the Marisol', undefined]]);
+    assert.deepEqual([c.ok, c.fixed], [false, 'Rook: So the ship went down, eh? And the logbook with it.']);
+});
+
+test('the drop-in: auto checks a group reply with a suspect even when nobody spoke of the past; fast flags it without a model', async () => {
+    const { keeper, rook } = await harbor();
+    const { startServer } = await import('../src/server.mjs');
+    const server = startServer(0);
+    await new Promise(r => server.once('listening', r));
+    const send = (model, check) => fetch(`http://127.0.0.1:${server.address().port}/v1/chat/completions`, { method: 'POST', headers: { Authorization: `Bearer ${own.key}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages: [{ role: 'user', content: 'Evening, all.' }], kiori: { brains: [keeper, rook], player: 'Leo', ...(check && { check }) } }) });
+    const audits = () => chatCalls('You check a draft reply').length;
+    try {
+        const before = audits();
+        const r = await send('group-reply');
+        assert.equal(r.headers.get('x-kiori-check'), 'fixed');
+        assert.equal((await r.json()).choices[0].message.content, 'Rook: So the ship went down, eh?');
+        assert.equal(audits(), before + 1);
+        // A reply the pre-check finds nothing in, and no past: no model check, no header
+        const plain = await send('meta/llama-roleplay');
+        assert.equal(plain.headers.get('x-kiori-check'), null);
+        await plain.json();
+        // fast: the pre-check alone flags it, and the reply goes out as it came
+        const quick = await send('group-reply', 'fast');
+        assert.equal(quick.headers.get('x-kiori-check'), 'flagged');
+        assert.equal((await quick.json()).choices[0].message.content, 'Rook: So the Marisol went down, eh?');
+        assert.equal(audits(), before + 1);
+    } finally { server.close(); }
 });
 
 test('sleep: near-duplicates merge, and a brain past what it holds forgets its faintest conversation memories', async () => {

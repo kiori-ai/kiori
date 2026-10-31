@@ -1,9 +1,10 @@
 // The drop-in. Point the chat calls you already make at Kiori (OpenAI-compatible: base URL .../v1, your Kiori key as
 // the API key) and send the brains with them: "kiori": { "brain": ... } (or "brains" for a group chat) in the body.
 // Kiori puts each character's mind into the system prompt, passes the request on to your model with your brain API
-// key (or another provider of yours), and sends the reply back. Streaming works. With check (by default when the
-// player brings up the past) the reply is held, checked by the auditor and fixed, then sent. Nothing is kept: the
-// brains learn from the chat when you call POST /v1/brains/organize.
+// key (or another provider of yours), and sends the reply back. Streaming works. With check the reply is held,
+// checked and fixed, then sent: by default (auto) the free pre-check reads every reply it can find something in (a
+// group chat, or a character keeping up a lie), and the auditor is called when the pre-check has suspects or the
+// player brings up the past. Nothing is kept: the brains learn from the chat when you call POST /v1/brains/organize.
 import { getProject, keptKey } from './accounts.mjs';
 import { textOf, num, scrub } from './text.mjs';
 import { once } from 'node:events';
@@ -114,7 +115,9 @@ export async function chatCompletions(ctx) {
     // stream_options only goes with a streaming request: a held one goes out whole, and providers refuse it there
     const { kiori, stream_options, ...rest } = body;
     const forward = { ...rest, messages: withMinds(body.messages, minds.characters) };
-    const hold = o.check === 'true' || (o.check === 'auto' && minds.check_recommended);
+    // auto holds a reply the pre-check can say something about: the past came up, there are several characters, or one
+    // of them keeps up a lie. fast holds it for the pre-check alone
+    const hold = o.check === 'true' || o.check === 'fast' || (o.check === 'auto' && (minds.check_recommended || o.brains.length > 1 || o.brains.some(b => b.memories.some(m => m.lie))));
     const headers = {};
     // A client that hangs up stops the model too
     const abort = new AbortController();
@@ -130,14 +133,22 @@ export async function chatCompletions(ctx) {
         const data = await answerJson(r);
         if (!r.ok) return passError(ctx.res, r, data, headers, up);
         let reply = textOf(data?.choices?.[0]?.message?.content);
-        // The check runs on the project's brain API key; without one, with no text to check (a tool call), or with more
-        // than one reply's worth of it, the reply goes out unchecked
-        if (hold && (!reply.trim() || reply.length > MAX_DRAFT || !credentialsFor(ctx.project).key)) headers['X-Kiori-Check'] = 'skipped';
-        else if (hold && reply.trim()) {
+        // The auditor runs on the project's brain API key; without one, with no text to check (a tool call), or with
+        // more than one reply's worth of it, the reply goes out unchecked. In auto, a reply the pre-check finds nothing
+        // in, when nobody brought up the past, goes out as it is, with no header
+        const asked = { draft: reply, messages: body.messages, player: o.player };
+        if (hold && (!reply.trim() || reply.length > MAX_DRAFT)) headers['X-Kiori-Check'] = 'skipped';
+        else if (hold) {
             try {
-                const c = await checkReply(ctx.project, o.brains, { draft: reply, messages: body.messages, player: o.player });
-                headers['X-Kiori-Check'] = c.ok ? 'ok' : 'fixed';
-                if (!c.ok) reply = c.fixed;
+                const pre = o.check === 'true' ? null : await checkReply(ctx.project, o.brains, { ...asked, check: 'fast' });
+                if (pre && o.check === 'fast') headers['X-Kiori-Check'] = pre.ok ? 'ok' : 'flagged';
+                else if (pre && !pre.suspects.length && !minds.check_recommended) { /* nothing to check */ }
+                else if (!credentialsFor(ctx.project).key) headers['X-Kiori-Check'] = 'skipped';
+                else {
+                    const c = await checkReply(ctx.project, o.brains, asked);
+                    headers['X-Kiori-Check'] = c.ok ? 'ok' : c.fixed !== reply ? 'fixed' : 'flagged';
+                    if (!c.ok) reply = c.fixed;
+                }
             } catch { headers['X-Kiori-Check'] = 'failed'; }
             if (data.choices[0].message) data.choices[0].message.content = reply;
         }

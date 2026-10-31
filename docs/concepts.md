@@ -71,6 +71,10 @@ Being there is one thing; how you know something is another. When Tom tells Ines
 - **Gossip** isn't distorted by Kiori: what the teller actually said is what the listener learns, word for word. Confidence falls with each hop, and long-held hearsay blurs in sleep like everything else.
 - **Telling** is kept too: when a character passes something on, a `told` memory records to whom and what, written only from their own line and only for listeners who were there.
 
+### Lies
+
+A brain is one point of view, so a lie lives on the liar's side. When the organizer sees a character say something their memories or the scenes show they know is false, it writes a `told` memory with `lie: true`, what they `said`, and the `truth`: a quote from the scenes, or `truth_ref`, the id of their memory that holds it. Without a provable truth it stays a plain `told` record: a mistake isn't a lie. The listener just believes what they were told, with the liar as its source (and a distrusted liar is believed less). When a lie is shown false in front of someone, they learn the truth with its own source and that they were lied to, and by whom; the old belief stays, as people remember a lie too. Recall gives the liar a section, "Lies they are keeping up", with to whom and what they said: toward those people they stick to the lie, unless they choose to confess. Editing or rerolling the message with the lie takes the record back, and the listener's belief with it.
+
 ## The organizer
 
 The organizer is the model that writes into brains, on your brain API key. It:
@@ -84,8 +88,17 @@ The organizer is the model that writes into brains, on your brain API key. It:
 The auditor is the model that checks, in three places:
 
 - **When writing** (no model needed): everything the organizer wants to write must quote the chat. If the quote isn't really there, it isn't written.
-- **Before a reply is shown** (`/v1/brains/check`): a draft is checked against what each speaking character really knows, for leaks, contradictions, invented pasts, unsupported claims and misattributions (naming the wrong source, or speaking as an eyewitness of hearsay), and fixed with minimal edits.
+- **Before a reply is shown** (`/v1/brains/check`): a draft is checked against what each speaking character really knows, for leaks, contradictions, invented pasts, unsupported claims and misattributions (naming the wrong source, or speaking as an eyewitness of hearsay), and fixed with minimal edits. Two issues are about lies. A `lie_slip` is a liar contradicting their own lie toward someone they told it to, without owning up (a confession is fine). A `lie` is a statement that contradicts their memories to protect one of their secrets or to keep up a lie already told: it is the character lying, not a mistake, so it is reported but never fixed and doesn't make `ok` false. Any other contradiction is still a `contradiction`, and fixed.
 - **During sleep**: it presses faded memories down to their gist.
+
+### The pre-check
+
+Before the auditor reads a draft, Kiori's code reads it against the data, at no cost. For each character checked, it takes the words of their lines (in a group, their `Name: words` lines) and looks for the ones only someone else could know: words the other brains' memories of the chat or secrets hold, or a recent message the character didn't take in, and that nothing they could know holds (their memories except what they were made to forget, their card and the people in their life, every recent message as they took it in, the names in the call, who each one is, and the world's lore).
+
+- A **name or a number** (a capitalized word that doesn't open a sentence, or three digits or more) that only other brains hold, and at most a third of the brains in the call, is a `leak` at once, with `"by": "precheck"`.
+- Any other such word is a **suspect**: a word of four letters or more (or a number of two digits), not a common one, that at most a third of the brains hold. So are the words of a lie's truth (that the lie didn't say) when the person they lied to is in the scene, and the words of something they were made to forget. Suspects come back in `suspects`, and the auditor's prompt lists them to judge in context.
+
+`check: "fast"` returns the pre-check alone: no model call, no key needed, in milliseconds. A plain check runs the pre-check first and hands its suspects to the auditor. The drop-in's `auto` runs the pre-check on every reply it can find something in (a group chat, or a character keeping up a lie) and calls the auditor when there are suspects or the player brings up the past. A token match misses a paraphrase ("the book by the lamp" for "logbook") and a leak across languages, which is why the auditor still judges: the pre-check makes checking every turn affordable, it doesn't replace it.
 
 ## Lining up a chat
 
@@ -107,6 +120,7 @@ Kiori's model work runs on your brain API key, so your provider bills it. Measur
 | Placing people in scenes | group chats, per new stretch | about $0.002 | seconds |
 | Recall | every turn | one embedding, about $0.00001 | a fraction of a second |
 | Check | when you ask, per reply | about $0.001 | a few seconds |
+| Check, fast (the pre-check alone) | every turn, if you like | nothing | milliseconds |
 
 During the beta, Kiori itself charges nothing.
 
