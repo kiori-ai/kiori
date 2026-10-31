@@ -22,6 +22,7 @@ All notable changes to Kiori are written down here. The format follows [Keep a C
 - The beta terms and the privacy policy, at `/terms` and `/privacy` on the site and the server (`legal/`, with the facts they depend on in `src/legal.mjs`). They're linked from the site, the console, the docs and the READMEs. Neither has been reviewed by a lawyer yet.
 - `commit` in `GET /health`: the build's commit, from the deploy kit's `DEPLOYED` file, else from git, so two builds of one version can be told apart.
 - An `id` on each of recall's `lies` (the `told` memory) and `facts`, so an app can link them to their memories.
+- The leak check in the SillyTavern extension (1.1.0): each character reply is checked with `/v1/brains/check` once it's on screen, in the background (swipes and continues too), against the speaker's brain and, in a group, the other members' brains. **Check replies** in the drawer: Fast (the default, the free pre-check) marks a name or number only another character holds under the reply, with "ask the auditor" to fix that one reply; Full also runs the auditor on every reply (about $0.001 each on the brain API key) and puts its fix in place of the reply, in the chat file too, so the brains learn from the fixed text; Off. A lie a character keeps up gets a small neutral mark, never an error. A failed check leaves the reply as it was. The extension now also keeps who Kiori placed in each group message (`placed`) and sends it with checks as `present`.
 
 ### Changed
 

@@ -110,7 +110,7 @@ const reply = await ai.chat.completions.create({
 
 In SillyTavern, open Extensions, then Install extension, and paste `https://github.com/kiori-ai/SillyTavern-Kiori`. Or download the zip from your console, unzip it into SillyTavern's `data/default-user/extensions` folder and reload SillyTavern. Paste your Kiori key in Extensions, Kiori, and chat as usual.
 
-Each character gets a brain the first time you talk. It's kept in the chat file on your own computer (with a fresh copy on the character's card, so a new chat starts from it) and grows after every reply. In a group chat, each reply gets only the mind of the character speaking. Edits, swipes and deletions are handled.
+Each character gets a brain the first time you talk. It's kept in the chat file on your own computer (with a fresh copy on the character's card, so a new chat starts from it) and grows after every reply. In a group chat, each reply gets only the mind of the character speaking. Edits, swipes and deletions are handled. Each reply is also checked for what its speaker couldn't know: the free pre-check marks it by default, and with **Check replies** on Full the auditor fixes it in the chat (about $0.001 a reply on your key).
 
 ## Errors and retries
 

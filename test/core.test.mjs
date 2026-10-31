@@ -1554,6 +1554,118 @@ test('SillyTavern extension: a brain on the first reply, its mind in the prompt,
     }
 });
 
+test('SillyTavern extension: each reply is checked; a name only another member holds is marked (fast) or fixed (full), a clean reply is untouched, a failed check leaves it', async () => {
+    const { keeper, rook } = await harbor();
+    const { startServer } = await import('../src/server.mjs');
+    const server = startServer(0);
+    await new Promise(r => server.once('listening', r));
+    const gw = await flakyGateway(`http://127.0.0.1:${server.address().port}`);
+    try {
+        // A group chat with Mira and Rook, as SillyTavern shows it: a message on screen is #chat .mes[mesid=N]
+        const handlers = {}, drawn = {}, clicks = {}, updated = [], emitted = [];
+        let saves = 0;
+        const miraCh = { name: 'Mira Voss', avatar: 'mira.png', data: { name: 'Mira Voss', description: 'A lighthouse keeper.', extensions: {} } };
+        const rookCh = { name: 'Rook', avatar: 'rook.png', data: { name: 'Rook', description: 'A sailor who rows the harbor.', extensions: {} } };
+        const reply = (i, who, mes) => ({ name: who.name, is_user: false, mes, send_date: `s${i}`, original_avatar: who.avatar, swipe_id: 0, swipes: [mes], swipe_info: [{ send_date: `s${i}`, extra: {} }], extra: {} });
+        const said = (i, mes) => ({ name: 'Leo', is_user: true, mes, send_date: `s${i}`, extra: {} });
+        const st = {
+            extensionSettings: { kiori: { apiKey: own.key, apiUrl: gw.url } },
+            saveSettingsDebounced() {}, name1: 'Leo', characters: [miraCh, rookCh], characterId: 1, groupId: 'g1', groups: [{ id: 'g1', members: ['mira.png', 'rook.png'] }],
+            chat: [said(0, 'Evening, all. Any news from the point?'), reply(1, rookCh, 'So the Marisol went down, eh? And the logbook with it.')],
+            chatMetadata: { kiori: { brains: { 'mira.png': keeper, 'rook.png': rook } } }, getCurrentChatId: () => 'g-chat', saveMetadata: async () => {},
+            saveChat: async () => { saves++; }, updateMessageBlock: i => updated.push(i), setExtensionPrompt() {}, writeExtensionField: async () => {},
+            eventSource: { on: (t, f) => (handlers[t] ??= []).push(f), emit: async (...a) => { emitted.push(a); } },
+            eventTypes: { MESSAGE_RECEIVED: 'received', MESSAGE_EDITED: 'edited', MESSAGE_DELETED: 'deleted', MESSAGE_SWIPED: 'swiped', MESSAGE_UPDATED: 'updated', CHAT_CHANGED: 'changed', CHARACTER_MESSAGE_RENDERED: 'rendered', MORE_MESSAGES_LOADED: 'more' },
+        };
+        const chain = { append: () => chain, prop: () => chain, val: () => chain, on: (ev, sel, f) => { if (typeof sel === 'string') clicks[`${ev} ${sel}`] = f; return chain; } };
+        const message = sel => { const id = /mesid="(\d+)"/.exec(sel)[1]; return { length: 0, find: what => ({ remove() { if (what === '.kiori-check') delete drawn[id]; }, after(html) { drawn[id] = html; } }) }; };
+        const button = el => ({ closest: () => ({ attr: () => String(el.mesid) }), hasClass: () => false, addClass() { return this; }, text() { return this; } });
+        const toasts = [], toastr = Object.fromEntries(['info', 'success', 'warning', 'error'].map(k => [k, (...a) => toasts.push(a)]));
+        const $ = x => (typeof x === 'string' && x.startsWith('#chat') ? message(x) : x && typeof x === 'object' && 'mesid' in x ? button(x) : chain);
+        Object.assign(globalThis, { SillyTavern: { getContext: () => st }, jQuery: f => f(), $, toastr, document: { getElementById: () => null } });
+        // A fresh copy of the extension, apart from the one the test before loaded
+        await import('../sillytavern/index.js?check');
+        const until = async f => { for (let i = 0; i < 300 && !f(); i++) await new Promise(r => setTimeout(r, 10)); assert.ok(f(), 'in time'); };
+        const rendered = (i, type = 'normal') => handlers.rendered.forEach(f => f(i, type));
+        const audits = () => chatCalls('You check a draft reply').length, checks = () => gw.seen.filter(c => c === 'POST /v1/brains/check').length;
+        assert.equal(st.extensionSettings.kiori.check, 'fast', 'fast by default');
+
+        // fast: Rook names the Marisol, which only Mira holds. The reply is marked, not changed, with no model call
+        const before = audits();
+        rendered(1);
+        await until(() => st.chat[1].extra.kiori_check);
+        assert.equal(st.chat[1].mes, 'So the Marisol went down, eh? And the logbook with it.');
+        assert.deepEqual(st.chat[1].extra.kiori_check.issues, [{ character: 'Rook', type: 'leak', quote: 'Marisol' }]);
+        assert.equal(st.chat[1].swipe_info[0].extra.kiori_check, st.chat[1].extra.kiori_check, 'kept on its swipe');
+        assert.match(drawn[1], /^<div class="kiori-check">Kiori: Rook couldn't know &quot;Marisol&quot; <span class="kiori-check-ask"[^>]*>ask the auditor<\/span><\/div>$/);
+        assert.equal(audits(), before);
+        // Drawn again on screen, it isn't checked again
+        rendered(1);
+        await new Promise(r => setTimeout(r, 50));
+        assert.equal(checks(), 1);
+
+        // "ask the auditor": the full check for that reply, and its fix takes the reply's place, in the chat file too
+        clicks['click .kiori-check-ask']({ currentTarget: { mesid: 1 } });
+        await until(() => st.chat[1].extra.kiori_check.mode === 'full');
+        assert.equal(st.chat[1].mes, 'So the ship went down, eh? And the logbook with it.');
+        assert.equal(st.chat[1].swipes[0], st.chat[1].mes);
+        assert.equal(st.chat[1].extra.kiori_check.original, 'So the Marisol went down, eh? And the logbook with it.');
+        assert.match(drawn[1], /^<div class="kiori-check kiori-check-fixed" title="Before: So the Marisol[^"]*">Kiori fixed this: Rook couldn't know &quot;the Marisol&quot;<\/div>$/);
+        assert.equal(audits(), before + 1);
+        assert.deepEqual([updated, emitted], [[1], [['updated', 1]]]);
+        assert.ok(saves >= 1);
+
+        // full: a leak is fixed as the reply arrives
+        st.extensionSettings.kiori.check = 'full';
+        st.chat.push(said(2, 'And the old wreck?'), reply(3, rookCh, 'The Marisol, aye. Sank in the storm.'));
+        rendered(3);
+        await until(() => st.chat[3].extra.kiori_check);
+        assert.equal(st.chat[3].mes, 'The ship, aye. Sank in the storm.');
+        assert.ok(st.chat[3].extra.kiori_check.fixed);
+        assert.match(drawn[3], /Kiori fixed this: Rook couldn't know/);
+
+        // A clean reply: checked by the auditor, untouched, nothing drawn
+        st.chat.push(said(4, 'Night, Rook.'), reply(5, rookCh, 'Night. Mind the tide on your way home.'));
+        const audited = audits(), saved = saves;
+        rendered(5);
+        await until(() => st.chat[5].extra.kiori_check);
+        assert.deepEqual([st.chat[5].mes, st.chat[5].extra.kiori_check.issues, drawn[5], audits(), saves], ['Night. Mind the tide on your way home.', [], undefined, audited + 1, saved]);
+
+        // A check that fails leaves the reply as it is, and the chat goes on
+        st.extensionSettings.kiori.check = 'fast';
+        st.chat.push(said(6, 'One more thing.'), reply(7, rookCh, 'The Marisol again, is it?'));
+        gw.plan.push(busy(500, { message: 'boom', code: 'INTERNAL' }));
+        const failed = checks();
+        rendered(7);
+        await until(() => checks() > failed);
+        await new Promise(r => setTimeout(r, 100));
+        assert.deepEqual([st.chat[7].mes, st.chat[7].extra.kiori_check, drawn[7]], ['The Marisol again, is it?', undefined, undefined]);
+
+        // Where Rook wasn't, Mira named the Halcyon (Kiori placed them while learning): said again by Rook, it's marked,
+        // even with the message among those sent
+        addMemories(keeper, [{ title: 'The Halcyon', body: 'I told Leo the Halcyon is still out there.', keys: ['halcyon'], about: ['Leo'] }], { scope: 'chat' });
+        st.chat.push(reply(8, miraCh, 'Leo, the Halcyon is still out there.'), said(9, 'Rook, any word?'), reply(10, rookCh, 'Word is the Halcyon is still out there.'));
+        st.chatMetadata.kiori.placed = { s8: ['Mira Voss', 'Leo'], s9: ['Leo', 'Rook', 'Mira Voss'], bogus: [{ name: 'X', mode: 'nope' }] };
+        rendered(10);
+        await until(() => st.chat[10].extra.kiori_check);
+        assert.deepEqual(st.chat[10].extra.kiori_check.issues.map(i => i.quote), ['Halcyon']);
+
+        // Kiori off, a greeting, or a slash command's message: nothing is checked
+        const sofar = checks();
+        st.chat.push(reply(11, rookCh, 'The Marisol!'));
+        rendered(11, 'first_message');
+        st.extensionSettings.kiori.enabled = false;
+        rendered(11);
+        await new Promise(r => setTimeout(r, 100));
+        assert.deepEqual([checks(), st.chat[11].extra.kiori_check], [sofar, undefined]);
+        assert.ok(toasts.every(a => a[2]?.escapeHtml === true));
+    } finally {
+        gw.close();
+        server.close();
+        for (const k of ['SillyTavern', 'jQuery', '$', 'toastr', 'document', 'kioriInterceptor']) delete globalThis[k];
+    }
+});
+
 test('access: the site form makes the project at once, on its own key, and answers with a sign-in link; one left waiting from before, the admin approves', async () => {
     const { setAdminKey } = await import('../src/config.mjs');
     setAdminKey('kia_test_admin_key_for_the_suite');

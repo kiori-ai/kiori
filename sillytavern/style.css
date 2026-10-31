@@ -3,3 +3,8 @@
 .kiori-status { margin: 10px 0 6px; padding: 8px 10px; border-radius: 6px; background: var(--black30a, rgba(0, 0, 0, .2)); font-size: .9em; line-height: 1.5; }
 .kiori-row { display: flex; gap: 6px; flex-wrap: wrap; }
 .kiori-note { display: block; margin-top: 8px; opacity: .7; }
+.kiori-check { margin-top: 6px; padding: 3px 8px; border-radius: 6px; border-left: 3px solid var(--SmartThemeQuoteColor, #e0a040); background: var(--black30a, rgba(0, 0, 0, .2)); font-size: .8em; line-height: 1.4; opacity: .85; }
+.kiori-check-fixed { border-left-color: var(--SmartThemeEmColor, #7fb07f); }
+.kiori-check-lie { border-left-color: var(--SmartThemeBorderColor, #888); }
+.kiori-check-ask { margin-left: 6px; cursor: pointer; text-decoration: underline; white-space: nowrap; }
+.kiori-check-ask.kiori-busy { cursor: progress; text-decoration: none; opacity: .7; }

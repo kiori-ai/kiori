@@ -51,7 +51,7 @@ It works with any model, in any language. You bring your own model key (OpenRout
 
 <p align="center"><img src=".github/assets/three-minds.webp" alt="Four polaroids from one evening; afterwards Mei says Paris, Kai says it's not his to tell, and Rosa knows nothing about it"></p>
 
-Try it live at **[kiori.io](https://kiori.io)**.
+See how it works on **[kiori.io](https://kiori.io)**, and try it there in the free beta.
 
 ## 🧠 What lives in a mind
 
