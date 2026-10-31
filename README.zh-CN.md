@@ -89,13 +89,13 @@ const { text } = await kiori.recall({ brain, messages: chat.slice(-60) });     /
 
 ## 🚀 快速开始
 
-SDK 都是没有依赖的单个文件：[`sdk/kiori.mjs`](sdk/kiori.mjs)（JavaScript，Node 18+ 和浏览器）和 [`sdk/kiori.py`](sdk/kiori.py)（Python 3.8+）。npm（`kiori`）和 PyPI（`kiori-ai`）的包即将发布。
+SDK 没有任何依赖：`npm install kiori`（JavaScript，Node 18+ 和浏览器）和 `pip install kiori-ai`（Python 3.8+）。每个 SDK 也是一个可以直接复制的单个文件：[`sdk/kiori.mjs`](sdk/kiori.mjs) 和 [`sdk/kiori.py`](sdk/kiori.py)。
 
 <details open>
 <summary><b>JavaScript</b></summary>
 
 ```js
-import { Kiori } from './kiori.mjs';
+import { Kiori } from 'kiori';
 const kiori = new Kiori({ apiKey: process.env.KIORI_API_KEY });
 
 let brain = await kiori.create({ character_card: card });
@@ -177,7 +177,7 @@ node bin/kiori.mjs serve                       # API、控制台和文档：http
 
 - [x] 从角色卡构建大脑、从聊天中学习、检索、泄密检查
 - [x] JavaScript 和 Python SDK、OpenAI 兼容的即插即用接口、SillyTavern 扩展
-- [ ] npm 和 PyPI 包
+- [x] npm 和 PyPI 包
 - [ ] 一个公开的基准测试：群聊中"谁知道什么"，有 Kiori 和没有 Kiori 的对比
 - [ ] Kiori 自己的小型大脑模型，让学习的成本只有现在的一小部分
 

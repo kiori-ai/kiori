@@ -89,13 +89,13 @@ const { text } = await kiori.recall({ brain, messages: chat.slice(-60) });     /
 
 ## 🚀 Quick start
 
-The SDKs are single files with no dependencies: [`sdk/kiori.mjs`](sdk/kiori.mjs) (JavaScript, Node 18+ and browsers) and [`sdk/kiori.py`](sdk/kiori.py) (Python 3.8+). Packages on npm (`kiori`) and PyPI (`kiori-ai`) are coming.
+The SDKs have no dependencies: `npm install kiori` (JavaScript, Node 18+ and browsers) and `pip install kiori-ai` (Python 3.8+). Each is also a single file you can copy: [`sdk/kiori.mjs`](sdk/kiori.mjs) and [`sdk/kiori.py`](sdk/kiori.py).
 
 <details open>
 <summary><b>JavaScript</b></summary>
 
 ```js
-import { Kiori } from './kiori.mjs';
+import { Kiori } from 'kiori';
 const kiori = new Kiori({ apiKey: process.env.KIORI_API_KEY });
 
 let brain = await kiori.create({ character_card: card });
@@ -175,7 +175,7 @@ Settings, the CLI and moving to a server: [docs/self-hosting.md](docs/self-hosti
 
 - [x] Brains from character cards, learning from the chat, recall, the leak check
 - [x] JavaScript and Python SDKs, the OpenAI-compatible drop-in, the SillyTavern extension
-- [ ] npm and PyPI packages
+- [x] npm and PyPI packages
 - [ ] A public benchmark: who-knows-what in group chats, with and without Kiori
 - [ ] Kiori's own small brain model, so learning costs a fraction of what it does today
 

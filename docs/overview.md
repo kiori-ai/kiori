@@ -27,7 +27,8 @@ your app ── a character card ─────────▶  Kiori  ── a
 4. **Call Kiori** from your server:
 
 ```js
-import { Kiori } from './kiori.mjs';   // https://kiori.io/sdk/kiori.mjs
+// npm install kiori   (Python: pip install kiori-ai)
+import { Kiori } from 'kiori';
 const kiori = new Kiori({ apiKey: process.env.KIORI_API_KEY });
 
 // Once per character: a brain from its card (a Tavern / SillyTavern card, or a name and a description)
@@ -55,9 +56,9 @@ That's the whole loop. [Integration](integration.md) walks through it, with grou
 
 ## SDKs and tools
 
-- **JavaScript**: [`kiori.mjs`](https://kiori.io/sdk/kiori.mjs), one file, no dependencies, with types in [`kiori.d.ts`](https://kiori.io/sdk/kiori.d.ts).
-- **Python**: [`kiori.py`](https://kiori.io/sdk/kiori.py), one file, no dependencies.
-- **SillyTavern**: the Kiori extension, from your console. Each brain lives in the chat file on the player's computer.
+- **JavaScript**: `npm install kiori`, then `import { Kiori } from 'kiori'`. Node 18+ and browsers, no dependencies, types included. Or copy the single file: [`kiori.mjs`](https://kiori.io/sdk/kiori.mjs), with types in [`kiori.d.ts`](https://kiori.io/sdk/kiori.d.ts).
+- **Python**: `pip install kiori-ai`, then `from kiori import Kiori`. Python 3.8+, no dependencies. Or copy the single file: [`kiori.py`](https://kiori.io/sdk/kiori.py).
+- **SillyTavern**: the Kiori extension. In SillyTavern, open Extensions, then Install extension, and paste `https://github.com/kiori-ai/SillyTavern-Kiori`, or download the zip from your console. Each brain lives in the chat file on the player's computer.
 - **Anything else**: plain HTTP, or a client generated from [`/openapi.json`](https://kiori.io/openapi.json).
 
 Both SDKs try again on their own when Kiori or your model provider is briefly unavailable. Every call is safe to repeat, because Kiori keeps nothing between calls.

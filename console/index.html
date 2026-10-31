@@ -300,8 +300,11 @@ async function redeem(token) {
   render();
 }
 
+const EXT_REPO = 'https://github.com/kiori-ai/SillyTavern-Kiori';
+
 const SNIPPETS = {
-  js: `<span class="k">import</span> { Kiori } <span class="k">from</span> <span class="s">'./kiori.mjs'</span>;   <span class="c">// ${location.origin}/sdk/kiori.mjs</span>
+  js: `<span class="c">// npm install kiori   (or copy the single file: ${location.origin}/sdk/kiori.mjs)</span>
+<span class="k">import</span> { Kiori } <span class="k">from</span> <span class="s">'kiori'</span>;
 <span class="k">const</span> kiori = <span class="k">new</span> Kiori({ apiKey: process.env.KIORI_API_KEY });
 
 <span class="c">// 1. Once per character: a brain from its card. Keep it anywhere.</span>
@@ -314,7 +317,9 @@ const SNIPPETS = {
 <span class="c">// 3. After the reply: the brain learns. Keep the new one.</span>
 ({ brain } = <span class="k">await</span> kiori.organize({ brain, messages }));
 <span class="k">await</span> db.save(chat.id, brain);`,
-  py: `<span class="k">from</span> kiori <span class="k">import</span> Kiori   <span class="c"># ${location.origin}/sdk/kiori.py</span>
+  py: `<span class="c"># pip install kiori-ai   (or copy the single file: ${location.origin}/sdk/kiori.py)</span>
+<span class="k">import</span> os
+<span class="k">from</span> kiori <span class="k">import</span> Kiori
 kiori = Kiori(os.environ[<span class="s">"KIORI_API_KEY"</span>])
 
 <span class="c"># 1. Once per character: a brain from its card. Keep it anywhere.</span>
@@ -382,7 +387,7 @@ async function renderProject() {
     <div class="connect-h"><h2><span class="num">3</span>Connect</h2><div class="seg" id="tabs"><button class="on" data-t="st">SillyTavern</button><button data-t="js">JavaScript</button><button data-t="py">Python</button></div></div>
     <div data-panel="st">
       <ol class="steps">
-        <li><b>Add the Kiori extension</b><p>Download it and unzip it into SillyTavern's <span class="mono small">data/default-user/extensions</span> folder, then reload SillyTavern.</p><div class="copyline"><span class="url">${h(location.origin)}/sillytavern.zip</span><a class="btn sm" href="/sillytavern.zip" download>Download</a></div></li>
+        <li><b>Add the Kiori extension</b><p>In SillyTavern, open Extensions, then Install extension, and paste this address.</p><div class="copyline"><span class="url">${EXT_REPO}</span><button class="btn sm" id="copyExt">Copy</button></div><p style="margin-top:8px">Or <a href="/sillytavern.zip" download>download the zip</a> and unzip it into SillyTavern's <span class="mono small">data/default-user/extensions</span> folder, then reload SillyTavern.</p></li>
         <li><b>Paste your Kiori key</b><p>Open Extensions, find Kiori, and paste the key from step 1. The address is this Kiori's: <span class="mono small">${h(location.origin)}</span>.</p></li>
         <li><b>Chat as usual</b><p>Each character gets a brain the first time you talk. It's saved in the chat file on your own computer and grows after every reply. Edit and swipe freely: the newest messages wait a moment before they're learned.</p></li>
       </ol>
@@ -434,6 +439,7 @@ async function renderProject() {
     if (project.llm.set) loadModels();
   }
   // Connect
+  $('#copyExt').onclick = e => copy(EXT_REPO, e.target);
   $('#tabs').onclick = e => { const b = e.target.closest('button'); if (!b) return; $$('button', $('#tabs')).forEach(x => x.classList.toggle('on', x === b)); $$('[data-panel]').forEach(p => p.hidden = p.dataset.panel !== b.dataset.t); };
   // Usage, last 30 days
   api('GET', '/v1/usage?days=30').then(u => {

@@ -11,6 +11,10 @@ All notable changes to Kiori are written down here. The format follows [Keep a C
 - A test badge in the READMEs, and the server's current size in lines of code.
 - This changelog, issue templates for bugs and questions, and a pull request template.
 
+### Changed
+
+- The install instructions in the READMEs, the docs and the console now point at the published homes: `npm install kiori`, `pip install kiori-ai`, and the SillyTavern extension's repository, https://github.com/kiori-ai/SillyTavern-Kiori, for Extensions → Install extension. The single files and the zip stay as the alternative.
+
 ## [2.0.0] - 2026-10-31
 
 The first public release. Kiori gives each character in a character AI a brain: memories, personality, and who knows what. Your app keeps the chat, the model and the brains.

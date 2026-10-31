@@ -10,13 +10,18 @@ Kiori never writes your chat and never keeps it. Your app keeps the conversation
 
 The API is at `https://api.kiori.io`. Every call carries your Kiori key: `Authorization: Bearer kio_...`.
 
+The clients are `kiori` on npm (Node 18+) and `kiori-ai` on PyPI (Python 3.8+). Without a package manager, copy the single file instead: [kiori.mjs](https://kiori.io/sdk/kiori.mjs) or [kiori.py](https://kiori.io/sdk/kiori.py).
+
 ```js
-import { Kiori } from './kiori.mjs';   // https://kiori.io/sdk/kiori.mjs
+// npm install kiori
+import { Kiori } from 'kiori';
 const kiori = new Kiori({ apiKey: process.env.KIORI_API_KEY });
 ```
 
 ```python
-from kiori import Kiori   # https://kiori.io/sdk/kiori.py
+# pip install kiori-ai
+import os
+from kiori import Kiori
 kiori = Kiori(os.environ["KIORI_API_KEY"])
 ```
 
@@ -103,7 +108,7 @@ const reply = await ai.chat.completions.create({
 
 ## SillyTavern
 
-Download the Kiori extension from your console, unzip it into SillyTavern's `data/default-user/extensions` folder and reload SillyTavern. Paste your Kiori key in Extensions, Kiori, and chat as usual.
+In SillyTavern, open Extensions, then Install extension, and paste `https://github.com/kiori-ai/SillyTavern-Kiori`. Or download the zip from your console, unzip it into SillyTavern's `data/default-user/extensions` folder and reload SillyTavern. Paste your Kiori key in Extensions, Kiori, and chat as usual.
 
 Each character gets a brain the first time you talk. It's kept in the chat file on your own computer (with a fresh copy on the character's card, so a new chat starts from it) and grows after every reply. In a group chat, each reply gets only the mind of the character speaking. Edits, swipes and deletions are handled.
 
