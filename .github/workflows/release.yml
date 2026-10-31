@@ -1,0 +1,59 @@
+name: release
+
+# Publishes the Python SDK (sdk/, "kiori-ai" on PyPI) with trusted publishing: no token, PyPI trusts this
+# workflow through OIDC. Runs on a version tag (v2.0.1) or by hand.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+      - name: Check the versions agree
+        run: |
+          py=$(python -c 'import tomllib; print(tomllib.load(open("sdk/pyproject.toml", "rb"))["project"]["version"])')
+          js=$(node -p 'require("./sdk/package.json").version')
+          echo "pyproject.toml: $py, package.json: $js"
+          if [ "$py" != "$js" ]; then
+            echo "::error::sdk/pyproject.toml ($py) and sdk/package.json ($js) have different versions"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$py" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $py"
+            exit 1
+          fi
+      - run: python -m pip install --upgrade build twine
+      - run: python -m build
+        working-directory: sdk
+      - run: python -m twine check --strict dist/*
+        working-directory: sdk
+      - uses: actions/upload-artifact@v5
+        with:
+          name: dist
+          path: sdk/dist/
+          if-no-files-found: error
+
+  pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/kiori-ai
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

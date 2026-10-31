@@ -1,0 +1,27 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+      # No dependencies and no lockfile, so there is nothing to install. The suite also runs the Python SDK
+      # (sdk/kiori.py) with the python3 that ubuntu-latest ships.
+      - run: npm test
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"

@@ -9,6 +9,7 @@
 他们记得什么、从未见过什么、爱着谁、藏着什么。<br>
 聊天、模型和大脑都留在你的应用里。Kiori 不存储任何大脑，也不存储任何聊天记录。
 
+[![Tests](https://github.com/kiori-ai/kiori/actions/workflows/test.yml/badge.svg)](https://github.com/kiori-ai/kiori/actions/workflows/test.yml)
 [![Stars](https://img.shields.io/github/stars/kiori-ai/kiori?style=flat&color=2b4acb)](https://github.com/kiori-ai/kiori/stargazers)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-2b4acb?style=flat)](#-许可证)
 [![Last commit](https://img.shields.io/github/last-commit/kiori-ai/kiori?style=flat&color=2b4acb)](https://github.com/kiori-ai/kiori/commits)
@@ -158,7 +159,7 @@ node bin/kiori.mjs serve                       # API、控制台和文档：http
 - **没有可以泄露的东西。** Kiori 不存储任何大脑和聊天记录。大脑是一个 JSON 对象，随每次调用往返，保存在你想保存的地方。
 - **你的模型密钥始终是密封的。** 静态加密（AES-256-GCM），只会发送给保存时对应的服务商，也永远不会完整地显示出来。
 - **调用只去该去的地方。** 模型调用只通过 https 发往公网地址；私有网络和云元数据地址在建立连接时就会被拒绝。
-- **每一行都可以读。** 一个进程，零依赖，服务端代码大约 3,400 行。详见 [docs/security.md](docs/security.md)。
+- **每一行都可以读。** 一个进程，零依赖，服务端代码大约 3,600 行。详见 [docs/security.md](docs/security.md)。
 
 ## 📚 文档
 

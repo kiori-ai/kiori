@@ -9,6 +9,7 @@
 What they remember, what they never saw, who they love, what they hide.<br>
 Your app keeps the chat, the model and the brains. Kiori stores no brains and no chats.
 
+[![Tests](https://github.com/kiori-ai/kiori/actions/workflows/test.yml/badge.svg)](https://github.com/kiori-ai/kiori/actions/workflows/test.yml)
 [![Stars](https://img.shields.io/github/stars/kiori-ai/kiori?style=flat&color=2b4acb)](https://github.com/kiori-ai/kiori/stargazers)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial-2b4acb?style=flat)](#-license)
 [![Last commit](https://img.shields.io/github/last-commit/kiori-ai/kiori?style=flat&color=2b4acb)](https://github.com/kiori-ai/kiori/commits)
@@ -31,7 +32,7 @@ Not a chatbot: the mind behind yours. Your app does the talking and your model w
 >
 > **Kiori gives you back:** a brain you keep, what this character knows right now (ready to drop into your prompt), what they just learned, and, if you ask, whether a draft reply gives away something they never heard.
 
-It works with any model, in any language. You bring your own model key (OpenRouter, OpenAI or Gemini) and pay your provider directly.
+It works with any model, in any language. You bring your own model key (OpenRouter, OpenAI or Gemini) and pay your provider directly. The server has zero dependencies and about 3,600 lines of code, small enough to read in an afternoon.
 
 ## 🌸 Why "Kiori"
 
@@ -158,7 +159,7 @@ Settings, the CLI and moving to a server: [docs/self-hosting.md](docs/self-hosti
 - **Nothing to leak.** Kiori stores no brains and no chats. The brain is a JSON object that travels with each call and lives wherever you keep it.
 - **Your model key stays sealed.** It's encrypted at rest (AES-256-GCM), only ever sent to the provider it was saved for, and never shown back whole.
 - **Calls only go where they should.** Model calls go out over https to public addresses only; private networks and cloud metadata addresses are refused at connect time.
-- **Read every line.** One process, zero dependencies, about 3,400 lines of server code. [docs/security.md](docs/security.md) has the details.
+- **Read every line.** One process, zero dependencies, about 3,600 lines of server code. [docs/security.md](docs/security.md) has the details.
 
 ## 📚 Docs
 
